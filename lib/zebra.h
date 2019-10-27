@@ -356,7 +356,8 @@ typedef enum {
 	AFI_IP = 1,
 	AFI_IP6 = 2,
 	AFI_L2VPN = 3,
-	AFI_MAX = 4
+   AFI_BGP_LS = 4,
+	AFI_MAX = 5
 } afi_t;
 
 /* Subsequent Address Family Identifier. */
@@ -369,7 +370,8 @@ typedef enum {
 	SAFI_EVPN = 5,
 	SAFI_LABELED_UNICAST = 6,
 	SAFI_FLOWSPEC = 7,
-	SAFI_MAX = 8
+   SAFI_BGP_LS = 8,
+	SAFI_MAX = 9
 } safi_t;
 
 /* Default Administrative Distance of each protocol. */
