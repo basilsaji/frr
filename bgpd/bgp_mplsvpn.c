@@ -252,25 +252,6 @@ int bgp_nlri_parse_vpn(struct peer *peer, struct attr *attr,
 #undef VPN_PREFIXLEN_MIN_BYTES
 }
 
-int bgp_nlri_parse_ls(struct peer *peer, struct attr *attr,
-             struct bgp_nlri *packet)
-{
-   uint8_t *pnt;
-   uint8_t *lim;
-   struct prefix p;
-   int psize = 0;
-   int prefixlen;
-   uint16_t type;
-   afi_t afi;
-   safi_t safi;
-
-   pnt = packet->nlri;
-   lim = pnt + packet->length;
-   afi = packet->afi;
-   safi = packet->safi;
-
-}
-
 /*
  * This function informs zebra of the label this vrf sets on routes
  * leaked to VPN. Zebra should install this label in the kernel with

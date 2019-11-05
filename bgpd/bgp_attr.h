@@ -24,6 +24,7 @@
 #include "mpls.h"
 #include "bgp_attr_evpn.h"
 #include "bgpd/bgp_encap_types.h"
+#include "bgpd/bgp_ls.h"
 
 /* Simple bit mapping. */
 #define BITMAP_NBBY 8
@@ -212,6 +213,13 @@ struct attr {
 
 	/* rmap set table */
 	uint32_t rmap_table_id;
+
+    /* LS NLRI */
+    ls_nlri_type ls_nlri;
+
+    /* LS ATTR */
+    ls_attr_type ls_attr;
+
 };
 
 /* rmap_change_flags definition */
@@ -312,6 +320,7 @@ struct bgp_attr_parser_args {
 	uint8_t flags;
 	uint8_t *startp;
 };
+extern int bgp_attr_ls_parse(struct bgp_attr_parser_args *args);
 extern int bgp_mp_reach_parse(struct bgp_attr_parser_args *args,
 			      struct bgp_nlri *);
 extern int bgp_mp_unreach_parse(struct bgp_attr_parser_args *args,
@@ -354,6 +363,16 @@ extern void bgp_packet_mpunreach_prefix(struct stream *s, struct prefix *p,
 					struct prefix_rd *prd, mpls_label_t *,
 					uint32_t, int, uint32_t, struct attr *);
 extern void bgp_packet_mpunreach_end(struct stream *s, size_t attrlen_pnt);
+
+extern void bgp_packet_mpattr_bgp_ls_node_nlri(struct stream *s, struct attr *attr);
+extern void bgp_packet_mpattr_bgp_ls_link_nlri(struct stream *s, struct attr *attr);
+extern void bgp_packet_mpattr_bgp_ls_prefix_nlri(struct stream *s, struct attr *attr);
+extern void bgp_packet_mpattr_bgp_ls(struct stream *s, afi_t afi, safi_t safi,
+					struct attr *attr);
+extern void bgp_packet_lsattr(struct stream *s, afi_t afi, safi_t safi, struct attr *attr);
+extern void bgp_packet_lsattr_prefix(struct stream *s, struct attr *attr);
+extern void bgp_packet_lsattr_link(struct stream *s, struct attr *attr);
+extern void bgp_packet_lsattr_node(struct stream *s, struct attr *attr);
 
 extern bgp_attr_parse_ret_t bgp_attr_nexthop_valid(struct peer *peer,
 						   struct attr *attr);

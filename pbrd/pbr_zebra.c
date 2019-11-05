@@ -316,6 +316,11 @@ void route_add(struct pbr_nexthop_group_cache *pnhgc, struct nexthop_group nhg,
 	case AFI_IP6:
 		route_add_helper(&api, nhg, AF_INET6);
 		break;
+	case AFI_BGP_LS:
+		DEBUGD(&pbr_dbg_zebra,
+			   "%s: Asked to install unsupported route type: L2VPN",
+			   __PRETTY_FUNCTION__);
+		break;
 	case AFI_L2VPN:
 		DEBUGD(&pbr_dbg_zebra,
 		       "%s: Asked to install unsupported route type: L2VPN",
@@ -362,6 +367,11 @@ void route_delete(struct pbr_nexthop_group_cache *pnhgc, afi_t afi)
 		zclient_route_send(ZEBRA_ROUTE_DELETE, zclient, &api);
 		api.prefix.family = AF_INET6;
 		zclient_route_send(ZEBRA_ROUTE_DELETE, zclient, &api);
+		break;
+	case AFI_BGP_LS:
+		DEBUGD(&pbr_dbg_zebra,
+			   "%s: Asked to delete unsupported route type: L2VPN",
+			   __PRETTY_FUNCTION__);
 		break;
 	case AFI_L2VPN:
 		DEBUGD(&pbr_dbg_zebra,

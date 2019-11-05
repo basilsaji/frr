@@ -63,6 +63,7 @@
 #include "bgpd/bgp_io.h"
 #include "bgpd/bgp_keepalives.h"
 #include "bgpd/bgp_flowspec.h"
+#include "bgpd/bgp_ls.h"
 
 DEFINE_HOOK(bgp_packet_dump,
 		(struct peer *peer, uint8_t type, bgp_size_t size,
