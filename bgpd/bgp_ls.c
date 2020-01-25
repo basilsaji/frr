@@ -74,10 +74,23 @@ int bgp_nlri_parse_ls_node_local_desc(struct peer *peer, struct attr *attr,
 			case LS_NODE_BGP_ROUTER_ID:
 				attr->ls_nlri.local_bgp_router_id = ntohl(*(uint32_t *)(pnt + BGP_LS_TLV_HEADER_LEN));
 				attr->ls_nlri.flag |= ATTR_FLAG_BIT(LS_NODE_LOCAL_BGP_RID_BIT);
+				zlog_debug("NODE LOCAL DESC: BGP ROUTER ID: %u",  attr->ls_nlri.local_bgp_router_id);
+				break;
+			case LS_NODE_BGP_LS_ID:
+				attr->ls_nlri.ls_id = ntohl(*(uint32_t *)(pnt + BGP_LS_TLV_HEADER_LEN));
+				attr->ls_nlri.flag |= ATTR_FLAG_BIT(LS_NODE_BGP_LS_ID_BIT);
+				zlog_debug("NODE LOCAL DESC: BGP LS ID: %u",  attr->ls_nlri.ls_id);
+				break;
+			case LS_NODE_IGP_ROUTER_ID:
+				memcpy(&attr->ls_nlri.igp_router_id.val, pnt + BGP_LS_TLV_HEADER_LEN, len);
+				attr->ls_nlri.igp_router_id.len = len;
+				attr->ls_nlri.flag |= ATTR_FLAG_BIT(LS_NODE_IGP_ROUTER_ID_BIT);
+				zlog_debug("NODE LOCAL DESC: IGP ROUTER ID");
 				break;
 			case LS_NODE_AS:
 				attr->ls_nlri.local_as = ntohl(*(uint32_t *)(pnt + BGP_LS_TLV_HEADER_LEN));
 				attr->ls_nlri.flag |= ATTR_FLAG_BIT(LS_NODE_LOCAL_AS_BIT);
+				zlog_debug("NODE LOCAL DESC: LOCAL AS: %u",  attr->ls_nlri.local_as);
 				break;
 			default:
 				return BGP_NLRI_PARSE_ERROR;
@@ -117,10 +130,12 @@ int bgp_nlri_parse_ls_node_remote_desc(struct peer *peer, struct attr *attr,
 			case LS_NODE_BGP_ROUTER_ID:
 				attr->ls_nlri.remote_bgp_router_id = ntohl(*(uint32_t *)(pnt + BGP_LS_TLV_HEADER_LEN));
 				attr->ls_nlri.flag |= ATTR_FLAG_BIT(LS_NODE_REMOTE_BGP_RID_BIT);
+				zlog_debug("NODE REMOTE DESC: BGP ROUTER ID: %u",  attr->ls_nlri.remote_bgp_router_id);
 				break;
 			case LS_NODE_AS:
 				attr->ls_nlri.remote_as = ntohl(*(uint32_t *)(pnt + BGP_LS_TLV_HEADER_LEN));
 				attr->ls_nlri.flag |= ATTR_FLAG_BIT(LS_NODE_REMOTE_AS_BIT);
+				zlog_debug("NODE REMOTE DESC: REMOTE AS: %u",  attr->ls_nlri.remote_as);
 				break;
 			default:
 				return BGP_NLRI_PARSE_ERROR;
@@ -158,10 +173,12 @@ int bgp_nlri_parse_ls_link_desc(struct peer *peer, struct attr *attr,
 			case LS_LINK_LOCAL_IPV4:
 				attr->ls_nlri.link_local_ipv4.s_addr = ntohl(*(uint32_t *)(pnt + BGP_LS_TLV_HEADER_LEN));
 				attr->ls_nlri.flag |= ATTR_FLAG_BIT(LS_LINK_LOCAL_IPV4_BIT);
+				zlog_debug("LINK DESC: LOCAL IPv4: %s",  inet_ntoa(attr->ls_nlri.link_local_ipv4));
 				break;
 			case LS_LINK_REMOTE_IPV4:
 				attr->ls_nlri.link_remote_ipv4.s_addr = ntohl(*(uint32_t *)(pnt + BGP_LS_TLV_HEADER_LEN));
 				attr->ls_nlri.flag |= ATTR_FLAG_BIT(LS_LINK_REMOTE_IPV4_BIT);
+				zlog_debug("LINK DESC: REMOTE IPv4: %s",  inet_ntoa(attr->ls_nlri.link_remote_ipv4));
 				break;
 			case LS_LINK_LOCAL_REMOTE_ID:
 				attr->ls_nlri.link_localid = ntohl(*(uint32_t *)(pnt + BGP_LS_TLV_HEADER_LEN));
@@ -192,6 +209,7 @@ int bgp_nlri_parse_ls_prefix_desc(struct peer *peer, struct attr *attr,
 	uint8_t *pnt;
 	uint8_t *lim;
 	uint16_t psize = 0;
+	char buf[BUFSIZ];
 
 	pnt = data;
 	lim = data + length;
@@ -223,6 +241,7 @@ int bgp_nlri_parse_ls_prefix_desc(struct peer *peer, struct attr *attr,
 				attr->ls_nlri.p.family = afi2family(afi);
 				memcpy(attr->ls_nlri.p.u.val, pnt + BGP_LS_TLV_HEADER_LEN + 1, len - 1);
 				attr->ls_nlri.flag |= ATTR_FLAG_BIT(LS_PREFIX_BIT);
+				zlog_debug("PREFIX DESC: IPv4: %s", prefix2str(&(attr->ls_nlri.p), buf, PREFIX_STRLEN));
 				break;
 			default:
 				return BGP_NLRI_PARSE_ERROR;
@@ -418,32 +437,42 @@ int bgp_nlri_parse_ls(struct peer *peer, struct attr *attr,
 	uint16_t type;
 	uint16_t length;
 	uint8_t *nlridata;
+	int psize = 0;
 
 	pnt = packet->nlri;
 	lim = pnt + packet->length;
 
-	type = ntohs(*(uint16_t *)pnt);
-	attr->ls_nlri.type = type;
-	length = ntohs(*(uint16_t *)(pnt + BGP_LS_NLRI_LENGTH_OFFSET));
-	nlridata = pnt + BGP_LS_NLRI_HEADER_LEN;
+	for (; pnt < lim; pnt += psize) {
+		/* All BGP LS NLRI types start with type and length */
+		if (pnt + 4 > lim )
+			return BGP_NLRI_PARSE_ERROR_BGPLS_MISSING_TYPE;
 
-	if ( (nlridata + length) > lim ) {
-		flog_err(
-			EC_BGP_UPDATE_RCV,
-			"%s [Error] Update packet error / LS NLRI (nlri length %d exceeds packet size %u)",
-			peer->host, length, (uint)(lim - pnt));
-		return BGP_NLRI_PARSE_ERROR_PACKET_OVERFLOW;
-	}
+		type = ntohs(*(uint16_t *)pnt);
+		attr->ls_nlri.type = type;
+		length = ntohs(*(uint16_t *)(pnt + BGP_LS_NLRI_LENGTH_OFFSET));
+		psize = length;
+		nlridata = pnt + BGP_LS_NLRI_HEADER_LEN;
 
-	switch(type) {
-		case LINK_STATE_NODE_NLRI:
-		   return bgp_nlri_parse_ls_node(peer, attr, nlridata, length);
-		case LINK_STATE_LINK_NLRI:
-		   return bgp_nlri_parse_ls_link(peer, attr, nlridata, length);
-		case LINK_STATE_PREFIX4_NLRI:
-		   return bgp_nlri_parse_ls_prefix(peer, attr, nlridata, length, AFI_IP);
-		case LINK_STATE_PREFIX6_NLRI:
-		   return bgp_nlri_parse_ls_prefix(peer, attr, nlridata, length, AFI_IP6);
+		if ( (nlridata + length) > lim ) {
+			flog_err(
+				EC_BGP_UPDATE_RCV,
+				"%s [Error] Update packet error / LS NLRI (nlri length %d exceeds packet size %u)",
+				peer->host, length, (uint)(lim - pnt));
+			return BGP_NLRI_PARSE_ERROR_PACKET_OVERFLOW;
+		}
+
+		switch(type) {
+			case LINK_STATE_NODE_NLRI:
+			   	return bgp_nlri_parse_ls_node(peer, attr, nlridata, length);
+			case LINK_STATE_LINK_NLRI:
+			   	return bgp_nlri_parse_ls_link(peer, attr, nlridata, length);
+			case LINK_STATE_PREFIX4_NLRI:
+			   	return bgp_nlri_parse_ls_prefix(peer, attr, nlridata, length, AFI_IP);
+			case LINK_STATE_PREFIX6_NLRI:
+			   	return bgp_nlri_parse_ls_prefix(peer, attr, nlridata, length, AFI_IP6);
+			default:
+				return BGP_NLRI_PARSE_ERROR;
+		}
 	}
 
 	return BGP_NLRI_PARSE_ERROR;

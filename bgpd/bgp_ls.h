@@ -53,6 +53,8 @@ typedef enum {
 	LS_LINK_REMOTE_IPV6 = 262,
 	LS_PREFIX_IP_REACH = 265,
 	LS_NODE_AS = 512,
+	LS_NODE_BGP_LS_ID = 513,
+	LS_NODE_IGP_ROUTER_ID = 515,
 	LS_NODE_BGP_ROUTER_ID = 516,
 } bgp_ls_desc_tlv_type;
 
@@ -67,7 +69,9 @@ typedef enum {
 	LS_LINK_REMOTE_ID_BIT = 8,
 	LS_LINK_LOCAL_IPV6_BIT = 9,
 	LS_LINK_REMOTE_IPV6_BIT = 10,
-	LS_PREFIX_BIT = 11
+	LS_PREFIX_BIT = 11,
+	LS_NODE_BGP_LS_ID_BIT = 12,
+	LS_NODE_IGP_ROUTER_ID_BIT = 13,
 } bgp_ls_nlri_data_bits;
 
 typedef enum {
@@ -101,6 +105,18 @@ typedef enum {
 	LS_OSPFV3 = 6,
 	LS_BGP = 7
 } bgp_ls_protocol_id;
+
+typedef struct {
+	/* Length of the IGP Router ID
+	 * 4 - OSPFv2/OSPFv3 non pseudo node
+	 * 8 - OSPFv2/OSPFv3 pseudo node
+	 * 6 - ISIS non pseudo node
+	 * 7 - ISIS pseudo node
+	 */
+	uint8_t	len;
+
+	uint8_t val[8];
+} bgp_ls_igp_router_id;
 
 typedef struct {
 	/* BGP LS ATTR present bits */
@@ -144,7 +160,7 @@ typedef struct {
 	uint16_t protocol_id;
 
 	/* BGP LS identifier */
-	uint16_t identifier;
+	uint64_t identifier;
 
 	/* BGP LS local node desc bgp router id */
 	uint32_t local_bgp_router_id;
@@ -178,6 +194,12 @@ typedef struct {
 
 	/* BGP LS IP Reach prefix */
 	struct prefix p;
+
+	/* BGP LS IGP Router ID */
+	bgp_ls_igp_router_id igp_router_id;
+
+	/* BGP LS Identifier */
+	uint32_t ls_id;
 
 } ls_nlri_type;
 

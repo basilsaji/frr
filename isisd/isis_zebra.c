@@ -86,8 +86,8 @@ static int isis_zebra_if_address_add(ZAPI_CALLBACK_ARGS)
 
 	p = c->address;
 
-	prefix2str(p, buf, sizeof(buf));
 #ifdef EXTREME_DEBUG
+	prefix2str(p, buf, sizeof(buf));
 	if (p->family == AF_INET)
 		zlog_debug("connected IP address %s", buf);
 	if (p->family == AF_INET6)
