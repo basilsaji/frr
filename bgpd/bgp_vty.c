@@ -117,6 +117,7 @@ static enum node_type bgp_node_type(afi_t afi, safi_t safi)
 			break;
 		}
 		break;
+/*
     case AFI_BGP_LS:
         switch (safi) {
         case SAFI_BGP_LS:
@@ -126,10 +127,10 @@ static enum node_type bgp_node_type(afi_t afi, safi_t safi)
             return BGP_LS_SPF_NODE;
             break;
         default:
-            /* not expected */
             return BGP_IPV4_NODE;
             break;
         }
+*/
 	case AFI_L2VPN:
 		return BGP_EVPN_NODE;
 		break;
@@ -241,10 +242,12 @@ afi_t bgp_node_afi(struct vty *vty)
 	case BGP_EVPN_NODE:
 		afi = AFI_L2VPN;
 		break;
+/*
     case BGP_LS_NODE:
     case BGP_LS_SPF_NODE:
         afi = AFI_BGP_LS;
         break;
+*/
 	default:
 		afi = AFI_IP;
 		break;
@@ -277,12 +280,14 @@ safi_t bgp_node_safi(struct vty *vty)
 	case BGP_FLOWSPECV6_NODE:
 		safi = SAFI_FLOWSPEC;
 		break;
+/*
     case BGP_LS_NODE:
         safi = SAFI_BGP_LS;
         break;
     case BGP_LS_SPF_NODE:
         safi = SAFI_BGP_LS_SPF;
         break;
+*/
 	default:
 		safi = SAFI_UNICAST;
 		break;
