@@ -73,4 +73,6 @@ extern int bgp_packet_set_size(struct stream *s);
 extern int bgp_generate_updgrp_packets(struct thread *);
 extern int bgp_process_packet(struct thread *);
 
+extern int bgp_generate_hex_updgrp_packets(struct thread *thread);
+
 #endif /* _QUAGGA_BGP_PACKET_H */
