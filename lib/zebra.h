@@ -357,7 +357,8 @@ typedef enum {
 	AFI_IP = 1,
 	AFI_IP6 = 2,
 	AFI_L2VPN = 3,
-	AFI_MAX = 4
+    AFI_BGP_LS = 4,
+	AFI_MAX = 5
 } afi_t;
 
 #define IS_VALID_AFI(a) ((a) > AFI_UNSPEC && (a) < AFI_MAX)
@@ -372,7 +373,10 @@ typedef enum {
 	SAFI_EVPN = 5,
 	SAFI_LABELED_UNICAST = 6,
 	SAFI_FLOWSPEC = 7,
-	SAFI_MAX = 8
+    SAFI_BGP_LS = 8,
+    SAFI_BGP_LS_VPN = 9,
+    SAFI_BGP_LS_SPF = 10,
+	SAFI_MAX = 11
 } safi_t;
 
 /* Default Administrative Distance of each protocol. */

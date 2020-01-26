@@ -1337,6 +1337,7 @@ struct bgp_nlri {
 #define BGP_ATTR_AS_PATHLIMIT                   21
 #define BGP_ATTR_PMSI_TUNNEL                    22
 #define BGP_ATTR_ENCAP                          23
+#define BGP_ATTR_LS                             29
 #define BGP_ATTR_LARGE_COMMUNITIES              32
 #define BGP_ATTR_PREFIX_SID                     40
 #if ENABLE_BGP_VNC_ATTR

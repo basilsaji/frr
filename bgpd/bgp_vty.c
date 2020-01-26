@@ -155,6 +155,20 @@ static enum node_type bgp_node_type(afi_t afi, safi_t safi)
 			break;
 		}
 		break;
+/*
+    case AFI_BGP_LS:
+        switch (safi) {
+        case SAFI_BGP_LS:
+            return BGP_LS_NODE;
+            break;
+        case SAFI_BGP_LS_SPF:
+            return BGP_LS_SPF_NODE;
+            break;
+        default:
+            return BGP_IPV4_NODE;
+            break;
+        }
+*/
 	case AFI_L2VPN:
 		return BGP_EVPN_NODE;
 		break;
@@ -197,6 +211,10 @@ static const char *get_afi_safi_vty_str(afi_t afi, safi_t safi)
 		return "IPv6 Flowspec";
 	else if (afi == AFI_L2VPN && safi == SAFI_EVPN)
 		return "L2VPN EVPN";
+	else if (afi == AFI_BGP_LS && safi == SAFI_BGP_LS)
+		return "LS";
+	else if (afi == AFI_BGP_LS && safi == SAFI_BGP_LS_SPF)
+		return "LS SPF";
 	else
 		return "Unknown";
 }
@@ -235,6 +253,10 @@ static const char *get_afi_safi_json_str(afi_t afi, safi_t safi)
 		return "ipv6Flowspec";
 	else if (afi == AFI_L2VPN && safi == SAFI_EVPN)
 		return "l2VpnEvpn";
+	else if (afi == AFI_BGP_LS && safi == SAFI_BGP_LS)
+		return "ls";
+	else if (afi == AFI_BGP_LS && safi == SAFI_BGP_LS_SPF)
+		return "lsSpf";
 	else
 		return "Unknown";
 }
@@ -254,9 +276,15 @@ afi_t bgp_node_afi(struct vty *vty)
 	case BGP_EVPN_NODE:
 		afi = AFI_L2VPN;
 		break;
+/*
+    case BGP_LS_NODE:
+    case BGP_LS_SPF_NODE:
+        afi = AFI_BGP_LS;
+        break;
 	default:
 		afi = AFI_IP;
 		break;
+*/
 	}
 	return afi;
 }
@@ -286,9 +314,17 @@ safi_t bgp_node_safi(struct vty *vty)
 	case BGP_FLOWSPECV6_NODE:
 		safi = SAFI_FLOWSPEC;
 		break;
+/*
+    case BGP_LS_NODE:
+        safi = SAFI_BGP_LS;
+        break;
+    case BGP_LS_SPF_NODE:
+        safi = SAFI_BGP_LS_SPF;
+        break;
 	default:
 		safi = SAFI_UNICAST;
 		break;
+*/
 	}
 	return safi;
 }
@@ -311,6 +347,8 @@ afi_t bgp_vty_afi_from_str(const char *afi_str)
 		afi = AFI_IP6;
 	else if (strmatch(afi_str, "l2vpn"))
 		afi = AFI_L2VPN;
+	else if (strmatch(afi_str, "ls"))
+		afi = AFI_BGP_LS;
 	return afi;
 }
 
@@ -330,6 +368,10 @@ int argv_find_and_parse_afi(struct cmd_token **argv, int argc, int *index,
 		ret = 1;
 		if (afi)
 			*afi = AFI_L2VPN;
+        } else if (argv_find(argv, argc, "ls", index)) {
+            ret = 1;
+            if (afi)
+                *afi = AFI_BGP_LS;
 	}
 	return ret;
 }
@@ -350,6 +392,10 @@ safi_t bgp_vty_safi_from_str(const char *safi_str)
 		safi = SAFI_LABELED_UNICAST;
 	else if (strmatch(safi_str, "flowspec"))
 		safi = SAFI_FLOWSPEC;
+	else if (strmatch(safi_str, "ls"))
+		safi = SAFI_BGP_LS;
+	else if (strmatch(safi_str, "ls-spf"))
+		safi = SAFI_BGP_LS_SPF;
 	return safi;
 }
 
@@ -381,6 +427,14 @@ int argv_find_and_parse_safi(struct cmd_token **argv, int argc, int *index,
 		ret = 1;
 		if (safi)
 			*safi = SAFI_FLOWSPEC;
+    } else if (argv_find(argv, argc, "ls", index)) {
+            ret = 1;
+            if (safi)
+                *safi = SAFI_BGP_LS;
+    } else if (argv_find(argv, argc, "ls-spf", index)) {
+            ret = 1;
+            if (safi)
+                *safi = SAFI_BGP_LS_SPF;
 	}
 	return ret;
 }
