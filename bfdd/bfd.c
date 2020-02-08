@@ -49,6 +49,8 @@ static void bs_admin_down_handler(struct bfd_session *bs, int nstate);
 static void bs_down_handler(struct bfd_session *bs, int nstate);
 static void bs_init_handler(struct bfd_session *bs, int nstate);
 static void bs_up_handler(struct bfd_session *bs, int nstate);
+static void bs_neighbour_admin_down_handler(struct bfd_session *bfd,
+					    uint8_t diag);
 
 /* Zeroed array with the size of an IPv6 address. */
 struct in6_addr zero_addr;
@@ -159,6 +161,7 @@ int bfd_session_enable(struct bfd_session *bs)
 	bs->vrf = vrf;
 	if (bs->vrf == NULL)
 		bs->vrf = vrf_lookup_by_id(VRF_DEFAULT);
+	assert(bs->vrf);
 
 	if (bs->key.ifname[0]
 	    && BFD_CHECK_FLAG(bs->flags, BFD_SESS_FLAG_MH) == 0)
@@ -311,7 +314,7 @@ void ptm_bfd_sess_up(struct bfd_session *bfd)
 	/* Start sending control packets with poll bit immediately. */
 	ptm_bfd_snd(bfd, 0);
 
-	control_notify(bfd);
+	control_notify(bfd, bfd->ses_state);
 
 	if (old_state != bfd->ses_state) {
 		bfd->stats.session_up++;
@@ -346,7 +349,7 @@ void ptm_bfd_sess_dn(struct bfd_session *bfd, uint8_t diag)
 
 	/* only signal clients when going from up->down state */
 	if (old_state == PTM_BFD_UP)
-		control_notify(bfd);
+		control_notify(bfd, PTM_BFD_DOWN);
 
 	/* Stop echo packet transmission if they are active */
 	if (BFD_CHECK_FLAG(bfd->flags, BFD_SESS_FLAG_ECHO_ACTIVE))
@@ -400,10 +403,21 @@ struct bfd_session *ptm_bfd_sess_find(struct bfd_pkt *cp,
 	if (cp->discrs.remote_discr)
 		return bfd_find_disc(peer, ntohl(cp->discrs.remote_discr));
 
-	/* Search for session without using discriminator. */
-	ifp = if_lookup_by_index(ifindex, vrfid);
-
-	vrf = vrf_lookup_by_id(vrfid);
+	/*
+	 * Search for session without using discriminator.
+	 *
+	 * XXX: we can't trust `vrfid` because the VRF handling is not
+	 * properly implemented. Meanwhile we should use the interface
+	 * VRF to find out which one it belongs.
+	 */
+	ifp = if_lookup_by_index_all_vrf(ifindex);
+	if (ifp == NULL) {
+		if (vrfid != VRF_DEFAULT)
+			vrf = vrf_lookup_by_id(vrfid);
+		else
+			vrf = NULL;
+	} else
+		vrf = vrf_lookup_by_id(ifp->vrf_id);
 
 	gen_bfd_key(&key, peer, local, is_mhop, ifp ? ifp->name : NULL,
 		    vrf ? vrf->name : VRF_DEFAULT_NAME);
@@ -581,7 +595,7 @@ skip_echo:
 
 		/* Change and notify state change. */
 		bs->ses_state = PTM_BFD_ADM_DOWN;
-		control_notify(bs);
+		control_notify(bs, bs->ses_state);
 
 		/* Don't try to send packets with a disabled session. */
 		if (bs->sock != -1)
@@ -595,7 +609,7 @@ skip_echo:
 
 		/* Change and notify state change. */
 		bs->ses_state = PTM_BFD_DOWN;
-		control_notify(bs);
+		control_notify(bs, bs->ses_state);
 
 		/* Enable all timers. */
 		bfd_recvtimer_update(bs);
@@ -867,10 +881,46 @@ static void bs_init_handler(struct bfd_session *bs, int nstate)
 	}
 }
 
+static void bs_neighbour_admin_down_handler(struct bfd_session *bfd,
+					    uint8_t diag)
+{
+	int old_state = bfd->ses_state;
+
+	bfd->local_diag = diag;
+	bfd->discrs.remote_discr = 0;
+	bfd->ses_state = PTM_BFD_DOWN;
+	bfd->polling = 0;
+	bfd->demand_mode = 0;
+	monotime(&bfd->downtime);
+
+	/* Slow down the control packets, the connection is down. */
+	bs_set_slow_timers(bfd);
+
+	/* only signal clients when going from up->down state */
+	if (old_state == PTM_BFD_UP)
+		control_notify(bfd, PTM_BFD_ADM_DOWN);
+
+	/* Stop echo packet transmission if they are active */
+	if (BFD_CHECK_FLAG(bfd->flags, BFD_SESS_FLAG_ECHO_ACTIVE))
+		ptm_bfd_echo_stop(bfd);
+
+	if (old_state != bfd->ses_state) {
+		bfd->stats.session_down++;
+
+		log_info("state-change: [%s] %s -> %s reason:%s",
+			bs_to_string(bfd), state_list[old_state].str,
+			state_list[bfd->ses_state].str,
+			get_diag_str(bfd->local_diag));
+	}
+}
+
 static void bs_up_handler(struct bfd_session *bs, int nstate)
 {
 	switch (nstate) {
 	case PTM_BFD_ADM_DOWN:
+		bs_neighbour_admin_down_handler(bs, BD_ADMIN_DOWN);
+		break;
+
 	case PTM_BFD_DOWN:
 		/* Peer lost or asked to shutdown connection. */
 		ptm_bfd_sess_dn(bs, BD_NEIGHBOR_DOWN);
@@ -1657,17 +1707,17 @@ static int bfd_vrf_enable(struct vrf *vrf)
 	if (vrf->vrf_id == VRF_DEFAULT ||
 	    vrf_get_backend() == VRF_BACKEND_NETNS) {
 		if (!bvrf->bg_shop)
-			bvrf->bg_shop = bp_udp_shop(vrf->vrf_id);
+			bvrf->bg_shop = bp_udp_shop(vrf);
 		if (!bvrf->bg_mhop)
-			bvrf->bg_mhop = bp_udp_mhop(vrf->vrf_id);
+			bvrf->bg_mhop = bp_udp_mhop(vrf);
 		if (!bvrf->bg_shop6)
-			bvrf->bg_shop6 = bp_udp6_shop(vrf->vrf_id);
+			bvrf->bg_shop6 = bp_udp6_shop(vrf);
 		if (!bvrf->bg_mhop6)
-			bvrf->bg_mhop6 = bp_udp6_mhop(vrf->vrf_id);
+			bvrf->bg_mhop6 = bp_udp6_mhop(vrf);
 		if (!bvrf->bg_echo)
-			bvrf->bg_echo = bp_echo_socket(vrf->vrf_id);
+			bvrf->bg_echo = bp_echo_socket(vrf);
 		if (!bvrf->bg_echov6)
-			bvrf->bg_echov6 = bp_echov6_socket(vrf->vrf_id);
+			bvrf->bg_echov6 = bp_echov6_socket(vrf);
 
 		/* Add descriptors to the event loop. */
 		if (!bvrf->bg_ev[0])
@@ -1812,4 +1862,9 @@ void bfd_session_update_vrf_name(struct bfd_session *bs, struct vrf *vrf)
 	memset(bs->key.vrfname, 0, sizeof(bs->key.vrfname));
 	strlcpy(bs->key.vrfname, vrf->name, sizeof(bs->key.vrfname));
 	hash_get(bfd_key_hash, bs, hash_alloc_intern);
+}
+
+unsigned long bfd_get_session_count(void)
+{
+	return bfd_key_hash->count;
 }

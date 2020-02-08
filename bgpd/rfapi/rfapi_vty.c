@@ -127,8 +127,8 @@ void rfapiRprefixApplyMask(struct rfapi_ip_prefix *rprefix)
 	int index;
 	int offset;
 
-	static uint8_t maskbit[] = {0x00, 0x80, 0xc0, 0xe0, 0xf0,
-				    0xf8, 0xfc, 0xfe, 0xff};
+	static const uint8_t maskbit[] = {0x00, 0x80, 0xc0, 0xe0, 0xf0,
+					  0xf8, 0xfc, 0xfe, 0xff};
 
 	switch (rprefix->prefix.addr_family) {
 	case AF_INET:
@@ -431,6 +431,14 @@ void rfapi_vty_out_vncinfo(struct vty *vty, struct prefix *p,
 		else
 			vty_out(vty, " label=%u",
 				decode_label(&bpi->extra->label[0]));
+
+		if (bpi->extra->num_sids) {
+			char buf[BUFSIZ];
+
+			vty_out(vty, " sid=%s",
+				inet_ntop(AF_INET6, &bpi->extra->sid[0], buf,
+					  sizeof(buf)));
+		}
 	}
 
 	if (!rfapiGetVncLifetime(bpi->attr, &lifetime)) {
@@ -4708,8 +4716,6 @@ static int vnc_add_vrf_prefix(struct vty *vty, const char *arg_vrf,
 	rfapiQprefix2Rprefix(&pfx, &rpfx);
 	memset(optary, 0, sizeof(optary));
 	if (arg_rd) {
-		if (opt != NULL)
-			opt->next = &optary[cur_opt];
 		opt = &optary[cur_opt++];
 		opt->type = RFAPI_VN_OPTION_TYPE_INTERNAL_RD;
 		if (!str2prefix_rd(arg_rd, &opt->v.internal_rd)) {

@@ -934,7 +934,6 @@ int zlog_reset_file(void)
 	zl->maxlvl[ZLOG_DEST_FILE] = ZLOG_DISABLED;
 
 	XFREE(MTYPE_ZLOG, zl->filename);
-	zl->filename = NULL;
 
 	return 1;
 }
@@ -1093,7 +1092,8 @@ static const struct zebra_desc_table command_types[] = {
 	DESC_ENTRY(ZEBRA_VXLAN_SG_ADD),
 	DESC_ENTRY(ZEBRA_VXLAN_SG_DEL),
 	DESC_ENTRY(ZEBRA_VXLAN_SG_REPLAY),
-};
+	DESC_ENTRY(ZEBRA_ERROR),
+	DESC_ENTRY(ZEBRA_CLIENT_CAPABILITIES)};
 #undef DESC_ENTRY
 
 static const struct zebra_desc_table unknown = {0, "unknown", '?'};

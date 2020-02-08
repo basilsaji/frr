@@ -54,8 +54,9 @@ typedef unsigned char uint8_t;
 #ifdef HAVE_SYS_SYSCTL_H
 #ifdef GNU_LINUX
 #include <linux/types.h>
-#endif
+#else
 #include <sys/sysctl.h>
+#endif
 #endif /* HAVE_SYS_SYSCTL_H */
 #include <sys/ioctl.h>
 #ifdef HAVE_SYS_CONF_H
@@ -359,6 +360,8 @@ typedef enum {
     AFI_BGP_LS = 4,
 	AFI_MAX = 5
 } afi_t;
+
+#define IS_VALID_AFI(a) ((a) > AFI_UNSPEC && (a) < AFI_MAX)
 
 /* Subsequent Address Family Identifier. */
 typedef enum {

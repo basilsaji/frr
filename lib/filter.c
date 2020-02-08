@@ -608,10 +608,7 @@ static int vty_access_list_remark_unset(struct vty *vty, afi_t afi,
 		return CMD_WARNING_CONFIG_FAILED;
 	}
 
-	if (access->remark) {
-		XFREE(MTYPE_TMP, access->remark);
-		access->remark = NULL;
-	}
+	XFREE(MTYPE_TMP, access->remark);
 
 	if (access->head == NULL && access->tail == NULL)
 		access_list_delete(access);
@@ -2147,7 +2144,7 @@ DEFUN (no_access_list_any,
        "Specify packets to forward\n"
        "Prefix to match. e.g. 10.0.0.0/8\n")
 {
-	int idx_word = 1;
+	int idx_word = 2;
 	int idx = 0;
 	char *seq = NULL;
 	char *permit_deny = NULL;
@@ -2352,7 +2349,7 @@ DEFUN (no_ipv6_access_list_exact,
 {
 	int idx = 0;
 	int exact = 0;
-	int idx_word = 2;
+	int idx_word = 3;
 	char *seq = NULL;
 	char *permit_deny = NULL;
 	char *prefix = NULL;
@@ -2394,7 +2391,7 @@ DEFUN (no_ipv6_access_list_any,
        "Specify packets to forward\n"
        "Any prefixi to match\n")
 {
-	int idx_word = 2;
+	int idx_word = 3;
 	int idx = 0;
 	char *seq = NULL;
 	char *permit_deny = NULL;
@@ -2498,8 +2495,8 @@ DEFUN (no_ipv6_access_list_remark_comment,
 	return no_ipv6_access_list_remark(self, vty, argc, argv);
 }
 
-void config_write_access_zebra(struct vty *, struct filter *);
-void config_write_access_cisco(struct vty *, struct filter *);
+static void config_write_access_zebra(struct vty *, struct filter *);
+static void config_write_access_cisco(struct vty *, struct filter *);
 
 /* show access-list command. */
 static int filter_show(struct vty *vty, const char *name, afi_t afi)
@@ -2554,7 +2551,8 @@ static int filter_show(struct vty *vty, const char *name, afi_t afi)
 				else {
 					vty_out(vty, " %s",
 						inet_ntoa(filter->addr));
-					if (filter->addr_mask.s_addr != 0)
+					if (filter->addr_mask.s_addr
+					    != INADDR_ANY)
 						vty_out(vty,
 							", wildcard bits %s",
 							inet_ntoa(
@@ -2602,7 +2600,8 @@ static int filter_show(struct vty *vty, const char *name, afi_t afi)
 				else {
 					vty_out(vty, " %s",
 						inet_ntoa(filter->addr));
-					if (filter->addr_mask.s_addr != 0)
+					if (filter->addr_mask.s_addr
+					    != INADDR_ANY)
 						vty_out(vty,
 							", wildcard bits %s",
 							inet_ntoa(
@@ -2685,7 +2684,7 @@ DEFUN (show_ipv6_access_list_name,
 	return filter_show(vty, argv[idx_word]->arg, AFI_IP6);
 }
 
-void config_write_access_cisco(struct vty *vty, struct filter *mfilter)
+static void config_write_access_cisco(struct vty *vty, struct filter *mfilter)
 {
 	struct filter_cisco *filter;
 
@@ -2695,7 +2694,7 @@ void config_write_access_cisco(struct vty *vty, struct filter *mfilter)
 		vty_out(vty, " ip");
 		if (filter->addr_mask.s_addr == 0xffffffff)
 			vty_out(vty, " any");
-		else if (filter->addr_mask.s_addr == 0)
+		else if (filter->addr_mask.s_addr == INADDR_ANY)
 			vty_out(vty, " host %s", inet_ntoa(filter->addr));
 		else {
 			vty_out(vty, " %s", inet_ntoa(filter->addr));
@@ -2704,7 +2703,7 @@ void config_write_access_cisco(struct vty *vty, struct filter *mfilter)
 
 		if (filter->mask_mask.s_addr == 0xffffffff)
 			vty_out(vty, " any");
-		else if (filter->mask_mask.s_addr == 0)
+		else if (filter->mask_mask.s_addr == INADDR_ANY)
 			vty_out(vty, " host %s", inet_ntoa(filter->mask));
 		else {
 			vty_out(vty, " %s", inet_ntoa(filter->mask));
@@ -2716,7 +2715,7 @@ void config_write_access_cisco(struct vty *vty, struct filter *mfilter)
 			vty_out(vty, " any\n");
 		else {
 			vty_out(vty, " %s", inet_ntoa(filter->addr));
-			if (filter->addr_mask.s_addr != 0)
+			if (filter->addr_mask.s_addr != INADDR_ANY)
 				vty_out(vty, " %s",
 					inet_ntoa(filter->addr_mask));
 			vty_out(vty, "\n");
@@ -2724,7 +2723,7 @@ void config_write_access_cisco(struct vty *vty, struct filter *mfilter)
 	}
 }
 
-void config_write_access_zebra(struct vty *vty, struct filter *mfilter)
+static void config_write_access_zebra(struct vty *vty, struct filter *mfilter)
 {
 	struct filter_zebra *filter;
 	struct prefix *p;

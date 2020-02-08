@@ -648,7 +648,7 @@ int rip_interface_address_delete(ZAPI_CALLBACK_ARGS)
 			rip_apply_address_del(ifc);
 		}
 
-		connected_free(ifc);
+		connected_free(&ifc);
 	}
 
 	return 0;
@@ -1210,7 +1210,6 @@ static int rip_interface_delete_hook(struct interface *ifp)
 {
 	rip_interface_reset(ifp->info);
 	XFREE(MTYPE_RIP_INTERFACE, ifp->info);
-	ifp->info = NULL;
 	return 0;
 }
 

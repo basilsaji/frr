@@ -467,16 +467,16 @@ struct stream *bpacket_reformat_for_peer(struct bpacket *pkt,
 					mod_v4nh = &peer->nexthop.v4;
 					nh_modified = 1;
 				}
-			} else if (!v4nh.s_addr) {
+			} else if (v4nh.s_addr == INADDR_ANY) {
 				mod_v4nh = &peer->nexthop.v4;
 				nh_modified = 1;
-			} else if (
-				peer->sort == BGP_PEER_EBGP
-				&& (bgp_multiaccess_check_v4(v4nh, peer) == 0)
-				&& !CHECK_FLAG(
+			} else if (peer->sort == BGP_PEER_EBGP
+				   && (bgp_multiaccess_check_v4(v4nh, peer)
+				       == 0)
+				   && !CHECK_FLAG(
 					   vec->flags,
 					   BPKT_ATTRVEC_FLAGS_RMAP_NH_UNCHANGED)
-				&& !peer_af_flag_check(
+				   && !peer_af_flag_check(
 					   peer, paf->afi, paf->safi,
 					   PEER_FLAG_NEXTHOP_UNCHANGED)) {
 				/* NOTE: not handling case where NH has new AFI
@@ -628,7 +628,7 @@ struct stream *bpacket_reformat_for_peer(struct bpacket *pkt,
 			mod_v4nh = &v4nh;
 
 			/* No route-map changes allowed for EVPN nexthops. */
-			if (!v4nh.s_addr) {
+			if (v4nh.s_addr == INADDR_ANY) {
 				mod_v4nh = &peer->nexthop.v4;
 				nh_modified = 1;
 			}
@@ -743,6 +743,22 @@ struct bpacket *subgroup_update_packet(struct update_subgroup *subgrp)
 		adj = adv->adj;
 		addpath_tx_id = adj->addpath_tx_id;
 		path = adv->pathi;
+
+		/* Check if we need to add a prefix to the packet if
+		 * maximum-prefix-out is set for the peer.
+		 */
+		if (CHECK_FLAG(peer->af_flags[afi][safi],
+			       PEER_FLAG_MAX_PREFIX_OUT)
+		    && subgrp->scount >= peer->pmax_out[afi][safi]) {
+			if (BGP_DEBUG(update, UPDATE_OUT)
+			    || BGP_DEBUG(update, UPDATE_PREFIX)) {
+				zlog_debug(
+					"%s reached maximum prefix to be send (%" PRIu32
+					")",
+					peer->host, peer->pmax_out[afi][safi]);
+			}
+			goto next;
+		}
 
 		space_remaining = STREAM_CONCAT_REMAIN(s, snlri, STREAM_SIZE(s))
 				  - BGP_MAX_PACKET_SIZE_OVERFLOW;
@@ -894,7 +910,7 @@ struct bpacket *subgroup_update_packet(struct update_subgroup *subgrp)
 			subgrp->scount++;
 
 		adj->attr = bgp_attr_intern(adv->baa->attr);
-
+next:
 		adv = bgp_advertise_clean_subgroup(subgrp, adj);
 	}
 

@@ -79,7 +79,7 @@ static int interface_address_delete(ZAPI_CALLBACK_ARGS)
 	if (!c)
 		return 0;
 
-	connected_free(c);
+	connected_free(&c);
 	return 0;
 }
 
@@ -260,7 +260,7 @@ static void static_nht_hash_free(void *data)
 {
 	struct static_nht_data *nhtd = data;
 
-	prefix_free(nhtd->nh);
+	prefix_free(&nhtd->nh);
 	XFREE(MTYPE_TMP, nhtd);
 }
 
@@ -388,7 +388,8 @@ extern void static_zebra_route_add(struct route_node *rn,
 			continue;
 
 		api_nh->vrf_id = si->nh_vrf_id;
-		api_nh->onlink = si->onlink;
+		if (si->onlink)
+			SET_FLAG(api_nh->flags, ZAPI_NEXTHOP_FLAG_ONLINK);
 
 		si->state = STATIC_SENT_TO_ZEBRA;
 
@@ -441,7 +442,7 @@ extern void static_zebra_route_add(struct route_node *rn,
 		if (si->snh_label.num_labels) {
 			int i;
 
-			SET_FLAG(api.message, ZAPI_MESSAGE_LABEL);
+			SET_FLAG(api_nh->flags, ZAPI_NEXTHOP_FLAG_LABEL);
 			api_nh->label_num = si->snh_label.num_labels;
 			for (i = 0; i < api_nh->label_num; i++)
 				api_nh->labels[i] = si->snh_label.label[i];

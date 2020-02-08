@@ -58,6 +58,7 @@
 #include "isisd/fabricd.h"
 #include "isisd/isis_tx_queue.h"
 #include "isisd/isis_pdu_counter.h"
+#include "isisd/isis_nb.h"
 
 static int ack_lsp(struct isis_lsp_hdr *hdr, struct isis_circuit *circuit,
 		   int level)
@@ -1053,6 +1054,8 @@ dontcheckadj:
 						   circuit->rcv_stream,
 						   circuit->area, level,
 						   lsp_confusion);
+					if (lsp_confusion)
+						isis_free_tlvs(tlvs);
 					tlvs = NULL;
 					/* ii */
 					lsp_flood_or_update(lsp, NULL,

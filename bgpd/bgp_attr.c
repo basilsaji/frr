@@ -32,6 +32,7 @@
 #include "table.h"
 #include "filter.h"
 #include "command.h"
+#include "srv6.h"
 
 #include "bgpd/bgpd.h"
 #include "bgpd/bgp_attr.h"
@@ -153,8 +154,9 @@ static bool cluster_hash_cmp(const void *p1, const void *p2)
 	const struct cluster_list *cluster2 = p2;
 
 	return (cluster1->length == cluster2->length
-		&& memcmp(cluster1->list, cluster2->list, cluster1->length)
-			   == 0);
+		&& (cluster1->list == cluster2->list
+		    || memcmp(cluster1->list, cluster2->list, cluster1->length)
+			       == 0));
 }
 
 static void cluster_free(struct cluster_list *cluster)
@@ -201,6 +203,8 @@ static struct hash *encap_hash = NULL;
 #if ENABLE_BGP_VNC
 static struct hash *vnc_hash = NULL;
 #endif
+static struct hash *srv6_l3vpn_hash;
+static struct hash *srv6_vpn_hash;
 
 struct bgp_attr_encap_subtlv *encap_tlv_dup(struct bgp_attr_encap_subtlv *orig)
 {
@@ -422,15 +426,168 @@ static struct transit *transit_intern(struct transit *transit)
 	return find;
 }
 
-void transit_unintern(struct transit *transit)
+static void transit_unintern(struct transit **transit)
 {
-	if (transit->refcnt)
-		transit->refcnt--;
+	if ((*transit)->refcnt)
+		(*transit)->refcnt--;
 
-	if (transit->refcnt == 0) {
-		hash_release(transit_hash, transit);
-		transit_free(transit);
+	if ((*transit)->refcnt == 0) {
+		hash_release(transit_hash, *transit);
+		transit_free(*transit);
+		*transit = NULL;
 	}
+}
+
+static void *srv6_l3vpn_hash_alloc(void *p)
+{
+	return p;
+}
+
+static void srv6_l3vpn_free(struct bgp_attr_srv6_l3vpn *l3vpn)
+{
+	XFREE(MTYPE_BGP_SRV6_L3VPN, l3vpn);
+}
+
+static struct bgp_attr_srv6_l3vpn *
+srv6_l3vpn_intern(struct bgp_attr_srv6_l3vpn *l3vpn)
+{
+	struct bgp_attr_srv6_l3vpn *find;
+
+	find = hash_get(srv6_l3vpn_hash, l3vpn, srv6_l3vpn_hash_alloc);
+	if (find != l3vpn)
+		srv6_l3vpn_free(l3vpn);
+	find->refcnt++;
+	return find;
+}
+
+static void srv6_l3vpn_unintern(struct bgp_attr_srv6_l3vpn **l3vpnp)
+{
+	struct bgp_attr_srv6_l3vpn *l3vpn = *l3vpnp;
+
+	if (l3vpn->refcnt)
+		l3vpn->refcnt--;
+
+	if (l3vpn->refcnt == 0) {
+		hash_release(srv6_l3vpn_hash, l3vpn);
+		srv6_l3vpn_free(l3vpn);
+		*l3vpnp = NULL;
+	}
+}
+
+static void *srv6_vpn_hash_alloc(void *p)
+{
+	return p;
+}
+
+static void srv6_vpn_free(struct bgp_attr_srv6_vpn *vpn)
+{
+	XFREE(MTYPE_BGP_SRV6_VPN, vpn);
+}
+
+static struct bgp_attr_srv6_vpn *srv6_vpn_intern(struct bgp_attr_srv6_vpn *vpn)
+{
+	struct bgp_attr_srv6_vpn *find;
+
+	find = hash_get(srv6_vpn_hash, vpn, srv6_vpn_hash_alloc);
+	if (find != vpn)
+		srv6_vpn_free(vpn);
+	find->refcnt++;
+	return find;
+}
+
+static void srv6_vpn_unintern(struct bgp_attr_srv6_vpn **vpnp)
+{
+	struct bgp_attr_srv6_vpn *vpn = *vpnp;
+
+	if (vpn->refcnt)
+		vpn->refcnt--;
+
+	if (vpn->refcnt == 0) {
+		hash_release(srv6_vpn_hash, vpn);
+		srv6_vpn_free(vpn);
+		*vpnp = NULL;
+	}
+}
+
+static uint32_t srv6_l3vpn_hash_key_make(const void *p)
+{
+	const struct bgp_attr_srv6_l3vpn *l3vpn = p;
+	uint32_t key = 0;
+
+	key = jhash(&l3vpn->sid, 16, key);
+	key = jhash_1word(l3vpn->sid_flags, key);
+	key = jhash_1word(l3vpn->endpoint_behavior, key);
+	return key;
+}
+
+static bool srv6_l3vpn_hash_cmp(const void *p1, const void *p2)
+{
+	const struct bgp_attr_srv6_l3vpn *l3vpn1 = p1;
+	const struct bgp_attr_srv6_l3vpn *l3vpn2 = p2;
+
+	return sid_same(&l3vpn1->sid, &l3vpn2->sid)
+	       && l3vpn1->sid_flags == l3vpn2->sid_flags
+	       && l3vpn1->endpoint_behavior == l3vpn2->endpoint_behavior;
+}
+
+static bool srv6_l3vpn_same(const struct bgp_attr_srv6_l3vpn *h1,
+			    const struct bgp_attr_srv6_l3vpn *h2)
+{
+	if (h1 == h2)
+		return true;
+	else if (h1 == NULL || h2 == NULL)
+		return false;
+	else
+		return srv6_l3vpn_hash_cmp((const void *)h1, (const void *)h2);
+}
+
+static unsigned int srv6_vpn_hash_key_make(const void *p)
+{
+	const struct bgp_attr_srv6_vpn *vpn = p;
+	uint32_t key = 0;
+
+	key = jhash(&vpn->sid, 16, key);
+	key = jhash_1word(vpn->sid_flags, key);
+	return key;
+}
+
+static bool srv6_vpn_hash_cmp(const void *p1, const void *p2)
+{
+	const struct bgp_attr_srv6_vpn *vpn1 = p1;
+	const struct bgp_attr_srv6_vpn *vpn2 = p2;
+
+	return sid_same(&vpn1->sid, &vpn2->sid)
+	       && vpn1->sid_flags == vpn2->sid_flags;
+}
+
+static bool srv6_vpn_same(const struct bgp_attr_srv6_vpn *h1,
+			  const struct bgp_attr_srv6_vpn *h2)
+{
+	if (h1 == h2)
+		return true;
+	else if (h1 == NULL || h2 == NULL)
+		return false;
+	else
+		return srv6_vpn_hash_cmp((const void *)h1, (const void *)h2);
+}
+
+static void srv6_init(void)
+{
+	srv6_l3vpn_hash =
+		hash_create(srv6_l3vpn_hash_key_make, srv6_l3vpn_hash_cmp,
+			    "BGP Prefix-SID SRv6-L3VPN-Service-TLV");
+	srv6_vpn_hash = hash_create(srv6_vpn_hash_key_make, srv6_vpn_hash_cmp,
+				    "BGP Prefix-SID SRv6-VPN-Service-TLV");
+}
+
+static void srv6_finish(void)
+{
+	hash_clean(srv6_l3vpn_hash, (void (*)(void *))srv6_l3vpn_free);
+	hash_free(srv6_l3vpn_hash);
+	srv6_l3vpn_hash = NULL;
+	hash_clean(srv6_vpn_hash, (void (*)(void *))srv6_vpn_free);
+	hash_free(srv6_vpn_hash);
+	srv6_vpn_hash = NULL;
 }
 
 static unsigned int transit_hash_key_make(const void *p)
@@ -464,15 +621,6 @@ static void transit_finish(void)
 
 /* Attribute hash routines. */
 static struct hash *attrhash;
-
-/* Shallow copy of an attribute
- * Though, not so shallow that it doesn't copy the contents
- * of the attr_extra pointed to by 'extra'
- */
-void bgp_attr_dup(struct attr *new, struct attr *orig)
-{
-	*new = *orig;
-}
 
 unsigned long int attr_count(void)
 {
@@ -565,7 +713,9 @@ bool attrhash_cmp(const void *p1, const void *p2)
 		    && overlay_index_same(attr1, attr2)
 		    && attr1->nh_ifindex == attr2->nh_ifindex
 		    && attr1->nh_lla_ifindex == attr2->nh_lla_ifindex
-		    && attr1->distance == attr2->distance)
+		    && attr1->distance == attr2->distance
+		    && srv6_l3vpn_same(attr1->srv6_l3vpn, attr2->srv6_l3vpn)
+		    && srv6_vpn_same(attr1->srv6_vpn, attr2->srv6_vpn))
 			return true;
 	}
 
@@ -596,12 +746,22 @@ static void attrhash_finish(void)
 static void attr_show_all_iterator(struct hash_bucket *bucket, struct vty *vty)
 {
 	struct attr *attr = bucket->data;
+	char sid_str[BUFSIZ];
 
 	vty_out(vty, "attr[%ld] nexthop %s\n", attr->refcnt,
 		inet_ntoa(attr->nexthop));
-	vty_out(vty, "\tflags: %" PRIu64 " med: %u local_pref: %u origin: %u weight: %u label: %u\n",
+
+	sid_str[0] = '\0';
+	if (attr->srv6_l3vpn)
+		inet_ntop(AF_INET6, &attr->srv6_l3vpn->sid, sid_str, BUFSIZ);
+	else if (attr->srv6_vpn)
+		inet_ntop(AF_INET6, &attr->srv6_vpn->sid, sid_str, BUFSIZ);
+
+	vty_out(vty,
+		"\tflags: %" PRIu64
+		" med: %u local_pref: %u origin: %u weight: %u label: %u sid: %s\n",
 		attr->flag, attr->med, attr->local_pref, attr->origin,
-		attr->weight, attr->label);
+		attr->weight, attr->label, sid_str);
 }
 
 void attr_show_all(struct vty *vty)
@@ -626,6 +786,11 @@ static void *bgp_attr_hash_alloc(void *p)
 		val->vnc_subtlvs = NULL;
 	}
 #endif
+	if (val->srv6_l3vpn)
+		val->srv6_l3vpn = NULL;
+	if (val->srv6_vpn)
+		val->srv6_vpn = NULL;
+
 	attr->refcnt = 0;
 	return attr;
 }
@@ -679,6 +844,18 @@ struct attr *bgp_attr_intern(struct attr *attr)
 							   ENCAP_SUBTLV_TYPE);
 		else
 			attr->encap_subtlvs->refcnt++;
+	}
+	if (attr->srv6_l3vpn) {
+		if (!attr->srv6_l3vpn->refcnt)
+			attr->srv6_l3vpn = srv6_l3vpn_intern(attr->srv6_l3vpn);
+		else
+			attr->srv6_l3vpn->refcnt++;
+	}
+	if (attr->srv6_vpn) {
+		if (!attr->srv6_vpn->refcnt)
+			attr->srv6_vpn = srv6_vpn_intern(attr->srv6_vpn);
+		else
+			attr->srv6_vpn->refcnt++;
 	}
 #if ENABLE_BGP_VNC
 	if (attr->vnc_subtlvs) {
@@ -861,7 +1038,7 @@ void bgp_attr_unintern_sub(struct attr *attr)
 	UNSET_FLAG(attr->flag, ATTR_FLAG_BIT(BGP_ATTR_CLUSTER_LIST));
 
 	if (attr->transit)
-		transit_unintern(attr->transit);
+		transit_unintern(&attr->transit);
 
 	if (attr->encap_subtlvs)
 		encap_unintern(&attr->encap_subtlvs, ENCAP_SUBTLV_TYPE);
@@ -870,6 +1047,12 @@ void bgp_attr_unintern_sub(struct attr *attr)
 	if (attr->vnc_subtlvs)
 		encap_unintern(&attr->vnc_subtlvs, VNC_SUBTLV_TYPE);
 #endif
+
+	if (attr->srv6_l3vpn)
+		srv6_l3vpn_unintern(&attr->srv6_l3vpn);
+
+	if (attr->srv6_vpn)
+		srv6_vpn_unintern(&attr->srv6_vpn);
 }
 
 /*
@@ -1819,7 +2002,7 @@ int bgp_mp_reach_parse(struct bgp_attr_parser_args *args,
 	case BGP_ATTR_NHLEN_IPV4:
 		stream_get(&attr->mp_nexthop_global_in, s, IPV4_MAX_BYTELEN);
 		/* Probably needed for RFC 2283 */
-		if (attr->nexthop.s_addr == 0)
+		if (attr->nexthop.s_addr == INADDR_ANY)
 			memcpy(&attr->nexthop.s_addr,
 			       &attr->mp_nexthop_global_in, IPV4_MAX_BYTELEN);
 		break;
@@ -2213,8 +2396,7 @@ static int bgp_attr_encap(uint8_t type, struct peer *peer, /* IN */
  * Read an individual SID value returning how much data we have read
  * Returns 0 if there was an error that needs to be passed up the stack
  */
-static bgp_attr_parse_ret_t bgp_attr_psid_sub(int32_t type,
-					      int32_t length,
+static bgp_attr_parse_ret_t bgp_attr_psid_sub(uint8_t type, uint16_t length,
 					      struct bgp_attr_parser_args *args,
 					      struct bgp_nlri *mp_update)
 {
@@ -2225,13 +2407,17 @@ static bgp_attr_parse_ret_t bgp_attr_psid_sub(int32_t type,
 	uint32_t srgb_base;
 	uint32_t srgb_range;
 	int srgb_count;
+	uint8_t sid_type, sid_flags;
+	uint16_t endpoint_behavior;
+	char buf[BUFSIZ];
 
 	if (type == BGP_PREFIX_SID_LABEL_INDEX) {
-		if (length != BGP_PREFIX_SID_LABEL_INDEX_LENGTH) {
-			flog_err(
-				EC_BGP_ATTR_LEN,
-				"Prefix SID label index length is %d instead of %d",
-				length, BGP_PREFIX_SID_LABEL_INDEX_LENGTH);
+		if (STREAM_READABLE(peer->curr) < length
+		    || length != BGP_PREFIX_SID_LABEL_INDEX_LENGTH) {
+			flog_err(EC_BGP_ATTR_LEN,
+				 "Prefix SID label index length is %" PRIu16
+				 " instead of %u",
+				 length, BGP_PREFIX_SID_LABEL_INDEX_LENGTH);
 			return bgp_attr_malformed(args,
 						  BGP_NOTIFY_UPDATE_ATTR_LENG_ERR,
 						  args->total);
@@ -2263,9 +2449,11 @@ static bgp_attr_parse_ret_t bgp_attr_psid_sub(int32_t type,
 
 	/* Placeholder code for the IPv6 SID type */
 	else if (type == BGP_PREFIX_SID_IPV6) {
-		if (length != BGP_PREFIX_SID_IPV6_LENGTH) {
+		if (STREAM_READABLE(peer->curr) < length
+		    || length != BGP_PREFIX_SID_IPV6_LENGTH) {
 			flog_err(EC_BGP_ATTR_LEN,
-				 "Prefix SID IPv6 length is %d instead of %d",
+				 "Prefix SID IPv6 length is %" PRIu16
+				 " instead of %u",
 				 length, BGP_PREFIX_SID_IPV6_LENGTH);
 			return bgp_attr_malformed(args,
 						  BGP_NOTIFY_UPDATE_ATTR_LENG_ERR,
@@ -2281,15 +2469,54 @@ static bgp_attr_parse_ret_t bgp_attr_psid_sub(int32_t type,
 
 	/* Placeholder code for the Originator SRGB type */
 	else if (type == BGP_PREFIX_SID_ORIGINATOR_SRGB) {
-		/* Ignore flags */
+		/*
+		 * ietf-idr-bgp-prefix-sid-05:
+		 *     Length is the total length of the value portion of the
+		 *     TLV: 2 + multiple of 6.
+		 *
+		 * peer->curr stream readp should be at the beginning of the 16
+		 * bit flag field at this point in the code.
+		 */
+
+		/*
+		 * Check that the TLV length field is sane: at least 2 bytes of
+		 * flag, and at least 1 SRGB (these are 6 bytes each)
+		 */
+		if (length < (2 + BGP_PREFIX_SID_ORIGINATOR_SRGB_LENGTH)) {
+			flog_err(
+				EC_BGP_ATTR_LEN,
+				"Prefix SID Originator SRGB length field claims length of %" PRIu16 " bytes, but the minimum for this TLV type is %u",
+				length,
+				2 + BGP_PREFIX_SID_ORIGINATOR_SRGB_LENGTH);
+			return bgp_attr_malformed(
+				args, BGP_NOTIFY_UPDATE_ATTR_LENG_ERR,
+				args->total);
+		}
+
+		/*
+		 * Check that we actually have at least as much data as
+		 * specified by the length field
+		 */
+		if (STREAM_READABLE(peer->curr) < length) {
+			flog_err(EC_BGP_ATTR_LEN,
+				 "Prefix SID Originator SRGB specifies length %" PRIu16 ", but only %zu bytes remain",
+				 length, STREAM_READABLE(peer->curr));
+			return bgp_attr_malformed(
+				args, BGP_NOTIFY_UPDATE_ATTR_LENG_ERR,
+				args->total);
+		}
+
+		/*
+		 * Check that the portion of the TLV containing the sequence of
+		 * SRGBs corresponds to a multiple of the SRGB size; to get
+		 * that length, we skip the 16 bit flags field
+		 */
 		stream_getw(peer->curr);
-
 		length -= 2;
-
 		if (length % BGP_PREFIX_SID_ORIGINATOR_SRGB_LENGTH) {
 			flog_err(
 				EC_BGP_ATTR_LEN,
-				"Prefix SID Originator SRGB length is %d, it must be a multiple of %d ",
+				"Prefix SID Originator SRGB length field claims attribute SRGB sequence section is %" PRIu16 "bytes, but it must be a multiple of %u",
 				length, BGP_PREFIX_SID_ORIGINATOR_SRGB_LENGTH);
 			return bgp_attr_malformed(
 				args, BGP_NOTIFY_UPDATE_ATTR_LENG_ERR,
@@ -2304,15 +2531,109 @@ static bgp_attr_parse_ret_t bgp_attr_psid_sub(int32_t type,
 		}
 	}
 
+	/* Placeholder code for the VPN-SID Service type */
+	else if (type == BGP_PREFIX_SID_VPN_SID) {
+		if (STREAM_READABLE(peer->curr) < length
+		    || length != BGP_PREFIX_SID_VPN_SID_LENGTH) {
+			flog_err(EC_BGP_ATTR_LEN,
+				 "Prefix SID VPN SID length is %" PRIu16
+				 " instead of %u",
+				 length, BGP_PREFIX_SID_VPN_SID_LENGTH);
+			return bgp_attr_malformed(args,
+						  BGP_NOTIFY_UPDATE_ATTR_LENG_ERR,
+						  args->total);
+		}
+
+		/* Parse VPN-SID Sub-TLV */
+		stream_getc(peer->curr);               /* reserved  */
+		sid_type = stream_getc(peer->curr);    /* sid_type  */
+		sid_flags = stream_getc(peer->curr);   /* sid_flags */
+		stream_get(&ipv6_sid, peer->curr,
+			   sizeof(ipv6_sid)); /* sid_value */
+
+		/* Log VPN-SID Sub-TLV */
+		if (BGP_DEBUG(vpn, VPN_LEAK_LABEL)) {
+			inet_ntop(AF_INET6, &ipv6_sid, buf, sizeof(buf));
+			zlog_debug(
+				"%s: vpn-sid: sid %s, sid-type 0x%02x sid-flags 0x%02x",
+				__func__, buf, sid_type, sid_flags);
+		}
+
+		/* Configure from Info */
+		attr->srv6_vpn = XMALLOC(MTYPE_BGP_SRV6_VPN,
+					 sizeof(struct bgp_attr_srv6_vpn));
+		attr->srv6_vpn->refcnt = 0;
+		attr->srv6_vpn->sid_flags = sid_flags;
+		sid_copy(&attr->srv6_vpn->sid, &ipv6_sid);
+	}
+
+	/* Placeholder code for the SRv6 L3 Service type */
+	else if (type == BGP_PREFIX_SID_SRV6_L3_SERVICE) {
+		if (STREAM_READABLE(peer->curr) < length
+		    || length != BGP_PREFIX_SID_SRV6_L3_SERVICE_LENGTH) {
+			flog_err(EC_BGP_ATTR_LEN,
+				 "Prefix SID SRv6 L3-Service length is %" PRIu16
+				 " instead of %u",
+				 length, BGP_PREFIX_SID_SRV6_L3_SERVICE_LENGTH);
+			return bgp_attr_malformed(args,
+				 BGP_NOTIFY_UPDATE_ATTR_LENG_ERR,
+				 args->total);
+		}
+
+		/* Parse L3-SERVICE Sub-TLV */
+		stream_getc(peer->curr);               /* reserved  */
+		stream_get(&ipv6_sid, peer->curr,
+			   sizeof(ipv6_sid)); /* sid_value */
+		sid_flags = stream_getc(peer->curr);   /* sid_flags */
+		endpoint_behavior = stream_getw(peer->curr); /* endpoint */
+		stream_getc(peer->curr);               /* reserved  */
+
+		/* Log L3-SERVICE Sub-TLV */
+		if (BGP_DEBUG(vpn, VPN_LEAK_LABEL)) {
+			inet_ntop(AF_INET6, &ipv6_sid, buf, sizeof(buf));
+			zlog_debug(
+				"%s: srv6-l3-srv sid %s, sid-flags 0x%02x, end-behaviour 0x%04x",
+				__func__, buf, sid_flags, endpoint_behavior);
+		}
+
+		/* Configure from Info */
+		attr->srv6_l3vpn = XMALLOC(MTYPE_BGP_SRV6_L3VPN,
+					   sizeof(struct bgp_attr_srv6_l3vpn));
+		attr->srv6_l3vpn->sid_flags = sid_flags;
+		attr->srv6_l3vpn->endpoint_behavior = endpoint_behavior;
+		sid_copy(&attr->srv6_l3vpn->sid, &ipv6_sid);
+	}
+
+	/* Placeholder code for Unsupported TLV */
+	else {
+
+		if (STREAM_READABLE(peer->curr) < length) {
+			flog_err(
+				EC_BGP_ATTR_LEN,
+				"Prefix SID SRv6 length is %" PRIu16
+				" - too long, only %zu remaining in this UPDATE",
+				length, STREAM_READABLE(peer->curr));
+			return bgp_attr_malformed(
+				args, BGP_NOTIFY_UPDATE_ATTR_LENG_ERR,
+				args->total);
+		}
+
+		if (bgp_debug_update(peer, NULL, NULL, 1))
+			zlog_debug(
+				"%s attr Prefix-SID sub-type=%u is not supported, skipped",
+				peer->host, type);
+
+		stream_forward_getp(peer->curr, length);
+	}
+
 	return BGP_ATTR_PARSE_PROCEED;
 }
 
 /* Prefix SID attribute
  * draft-ietf-idr-bgp-prefix-sid-05
  */
-bgp_attr_parse_ret_t
-bgp_attr_prefix_sid(int32_t tlength, struct bgp_attr_parser_args *args,
-		    struct bgp_nlri *mp_update)
+bgp_attr_parse_ret_t bgp_attr_prefix_sid(struct bgp_attr_parser_args *args,
+					 struct bgp_nlri *mp_update)
 {
 	struct peer *const peer = args->peer;
 	struct attr *const attr = args->attr;
@@ -2320,31 +2641,40 @@ bgp_attr_prefix_sid(int32_t tlength, struct bgp_attr_parser_args *args,
 
 	attr->flag |= ATTR_FLAG_BIT(BGP_ATTR_PREFIX_SID);
 
-	while (tlength) {
-		int32_t type, length;
+	uint8_t type;
+	uint16_t length;
+	size_t headersz = sizeof(type) + sizeof(length);
+
+	while (STREAM_READABLE(peer->curr) > 0) {
+
+		if (STREAM_READABLE(peer->curr) < headersz) {
+			flog_err(
+				EC_BGP_ATTR_LEN,
+				"Malformed Prefix SID attribute - insufficent data (need %zu for attribute header, have %zu remaining in UPDATE)",
+				headersz, STREAM_READABLE(peer->curr));
+			return bgp_attr_malformed(
+				args, BGP_NOTIFY_UPDATE_ATTR_LENG_ERR,
+				args->total);
+		}
 
 		type = stream_getc(peer->curr);
 		length = stream_getw(peer->curr);
+
+		if (STREAM_READABLE(peer->curr) < length) {
+			flog_err(
+				EC_BGP_ATTR_LEN,
+				"Malformed Prefix SID attribute - insufficient data (need %" PRIu8
+				" for attribute body, have %zu remaining in UPDATE)",
+				length, STREAM_READABLE(peer->curr));
+			return bgp_attr_malformed(args,
+						  BGP_NOTIFY_UPDATE_ATTR_LENG_ERR,
+						  args->total);
+		}
 
 		ret = bgp_attr_psid_sub(type, length, args, mp_update);
 
 		if (ret != BGP_ATTR_PARSE_PROCEED)
 			return ret;
-		/*
-		 * Subtract length + the T and the L
-		 * since length is the Vector portion
-		 */
-		tlength -= length + 3;
-
-		if (tlength < 0) {
-			flog_err(
-				EC_BGP_ATTR_LEN,
-				"Prefix SID internal length %d causes us to read beyond the total Prefix SID length",
-				length);
-			return bgp_attr_malformed(args,
-						  BGP_NOTIFY_UPDATE_ATTR_LENG_ERR,
-						  args->total);
-		}
 	}
 
 	return BGP_ATTR_PARSE_PROCEED;
@@ -2547,7 +2877,8 @@ bgp_attr_parse_ret_t bgp_attr_parse(struct peer *peer, struct attr *attr,
 
 			bgp_notify_send(peer, BGP_NOTIFY_UPDATE_ERR,
 					BGP_NOTIFY_UPDATE_ATTR_LENG_ERR);
-			return BGP_ATTR_PARSE_ERROR;
+			ret = BGP_ATTR_PARSE_ERROR;
+			goto done;
 		}
 
 		/* Fetch attribute flag and type. */
@@ -2570,7 +2901,8 @@ bgp_attr_parse_ret_t bgp_attr_parse(struct peer *peer, struct attr *attr,
 
 			bgp_notify_send(peer, BGP_NOTIFY_UPDATE_ERR,
 					BGP_NOTIFY_UPDATE_ATTR_LENG_ERR);
-			return BGP_ATTR_PARSE_ERROR;
+			ret = BGP_ATTR_PARSE_ERROR;
+			goto done;
 		}
 
 		/* Check extended attribue length bit. */
@@ -2591,7 +2923,8 @@ bgp_attr_parse_ret_t bgp_attr_parse(struct peer *peer, struct attr *attr,
 
 			bgp_notify_send(peer, BGP_NOTIFY_UPDATE_ERR,
 					BGP_NOTIFY_UPDATE_MAL_ATTR);
-			return BGP_ATTR_PARSE_ERROR;
+			ret = BGP_ATTR_PARSE_ERROR;
+			goto done;
 		}
 
 		/* Set type to bitmap to check duplicate attribute.  `type' is
@@ -2648,7 +2981,8 @@ bgp_attr_parse_ret_t bgp_attr_parse(struct peer *peer, struct attr *attr,
 				BGP_NOTIFY_UPDATE_ATTR_LENG_ERR, ndata,
 				ndl + lfl + 1);
 
-			return BGP_ATTR_PARSE_ERROR;
+			ret = BGP_ATTR_PARSE_ERROR;
+			goto done;
 		}
 
 		struct bgp_attr_parser_args attr_args = {
@@ -2673,7 +3007,7 @@ bgp_attr_parse_ret_t bgp_attr_parse(struct peer *peer, struct attr *attr,
 				attr_args.total);
 			if (ret == BGP_ATTR_PARSE_PROCEED)
 				continue;
-			return ret;
+			goto done;
 		}
 
 		/* OK check attribute and store it's value. */
@@ -2736,8 +3070,7 @@ bgp_attr_parse_ret_t bgp_attr_parse(struct peer *peer, struct attr *attr,
 					     startp);
 			break;
 		case BGP_ATTR_PREFIX_SID:
-			ret = bgp_attr_prefix_sid(length,
-						  &attr_args, mp_update);
+			ret = bgp_attr_prefix_sid(&attr_args, mp_update);
 			break;
 		case BGP_ATTR_PMSI_TUNNEL:
 			ret = bgp_attr_pmsi_tunnel(&attr_args);
@@ -2754,32 +3087,25 @@ bgp_attr_parse_ret_t bgp_attr_parse(struct peer *peer, struct attr *attr,
 			bgp_notify_send(peer, BGP_NOTIFY_UPDATE_ERR,
 					BGP_NOTIFY_UPDATE_MAL_ATTR);
 			ret = BGP_ATTR_PARSE_ERROR;
+			goto done;
 		}
 
 		if (ret == BGP_ATTR_PARSE_EOR) {
-			if (as4_path)
-				aspath_unintern(&as4_path);
-			return ret;
+			goto done;
 		}
 
-		/* If hard error occurred immediately return to the caller. */
 		if (ret == BGP_ATTR_PARSE_ERROR) {
 			flog_warn(EC_BGP_ATTRIBUTE_PARSE_ERROR,
 				  "%s: Attribute %s, parse error", peer->host,
 				  lookup_msg(attr_str, type, NULL));
-			if (as4_path)
-				aspath_unintern(&as4_path);
-			return ret;
+			goto done;
 		}
 		if (ret == BGP_ATTR_PARSE_WITHDRAW) {
-
 			flog_warn(
 				EC_BGP_ATTRIBUTE_PARSE_WITHDRAW,
 				"%s: Attribute %s, parse error - treating as withdrawal",
 				peer->host, lookup_msg(attr_str, type, NULL));
-			if (as4_path)
-				aspath_unintern(&as4_path);
-			return ret;
+			goto done;
 		}
 
 		/* Check the fetched length. */
@@ -2789,9 +3115,8 @@ bgp_attr_parse_ret_t bgp_attr_parse(struct peer *peer, struct attr *attr,
 				  peer->host, lookup_msg(attr_str, type, NULL));
 			bgp_notify_send(peer, BGP_NOTIFY_UPDATE_ERR,
 					BGP_NOTIFY_UPDATE_ATTR_LENG_ERR);
-			if (as4_path)
-				aspath_unintern(&as4_path);
-			return BGP_ATTR_PARSE_ERROR;
+			ret = BGP_ATTR_PARSE_ERROR;
+			goto done;
 		}
 	}
 
@@ -2802,9 +3127,9 @@ bgp_attr_parse_ret_t bgp_attr_parse(struct peer *peer, struct attr *attr,
 			  lookup_msg(attr_str, type, NULL));
 		bgp_notify_send(peer, BGP_NOTIFY_UPDATE_ERR,
 				BGP_NOTIFY_UPDATE_ATTR_LENG_ERR);
-		if (as4_path)
-			aspath_unintern(&as4_path);
-		return BGP_ATTR_PARSE_ERROR;
+
+		ret = BGP_ATTR_PARSE_ERROR;
+		goto done;
 	}
 
 	/*
@@ -2823,16 +3148,14 @@ bgp_attr_parse_ret_t bgp_attr_parse(struct peer *peer, struct attr *attr,
 	if (CHECK_FLAG(attr->flag, ATTR_FLAG_BIT(BGP_ATTR_NEXT_HOP))
 	    && !CHECK_FLAG(attr->flag, ATTR_FLAG_BIT(BGP_ATTR_MP_REACH_NLRI))) {
 		if (bgp_attr_nexthop_valid(peer, attr) < 0) {
-			return BGP_ATTR_PARSE_ERROR;
+			ret = BGP_ATTR_PARSE_ERROR;
+			goto done;
 		}
 	}
 
 	/* Check all mandatory well-known attributes are present */
-	if ((ret = bgp_attr_check(peer, attr)) < 0) {
-		if (as4_path)
-			aspath_unintern(&as4_path);
-		return ret;
-	}
+	if ((ret = bgp_attr_check(peer, attr)) < 0)
+		goto done;
 
 	/*
 	 * At this place we can see whether we got AS4_PATH and/or
@@ -2855,28 +3178,10 @@ bgp_attr_parse_ret_t bgp_attr_parse(struct peer *peer, struct attr *attr,
 					&as4_aggregator_addr)) {
 		bgp_notify_send(peer, BGP_NOTIFY_UPDATE_ERR,
 				BGP_NOTIFY_UPDATE_MAL_ATTR);
-		if (as4_path)
-			aspath_unintern(&as4_path);
-		return BGP_ATTR_PARSE_ERROR;
+		ret = BGP_ATTR_PARSE_ERROR;
+		goto done;
 	}
 
-	/* At this stage, we have done all fiddling with as4, and the
-	 * resulting info is in attr->aggregator resp. attr->aspath
-	 * so we can chuck as4_aggregator and as4_path alltogether in
-	 * order to save memory
-	 */
-	if (as4_path) {
-		aspath_unintern(&as4_path); /* unintern - it is in the hash */
-		/* The flag that we got this is still there, but that does not
-		 * do any trouble
-		 */
-	}
-	/*
-	 * The "rest" of the code does nothing with as4_aggregator.
-	 * there is no memory attached specifically which is not part
-	 * of the attr.
-	 * so ignoring just means do nothing.
-	 */
 	/*
 	 * Finally do the checks on the aspath we did not do yet
 	 * because we waited for a potentially synthesized aspath.
@@ -2884,21 +3189,59 @@ bgp_attr_parse_ret_t bgp_attr_parse(struct peer *peer, struct attr *attr,
 	if (attr->flag & (ATTR_FLAG_BIT(BGP_ATTR_AS_PATH))) {
 		ret = bgp_attr_aspath_check(peer, attr);
 		if (ret != BGP_ATTR_PARSE_PROCEED)
-			return ret;
+			goto done;
 	}
-	/* Finally intern unknown attribute. */
+
+	ret = BGP_ATTR_PARSE_PROCEED;
+done:
+
+	/*
+	 * At this stage, we have done all fiddling with as4, and the
+	 * resulting info is in attr->aggregator resp. attr->aspath so
+	 * we can chuck as4_aggregator and as4_path alltogether in order
+	 * to save memory
+	 */
+	if (as4_path) {
+		/*
+		 * unintern - it is in the hash
+		 * The flag that we got this is still there, but that
+		 * does not do any trouble
+		 */
+		aspath_unintern(&as4_path);
+	}
+
+	if (ret != BGP_ATTR_PARSE_ERROR) {
+		/* Finally intern unknown attribute. */
+		if (attr->transit)
+			attr->transit = transit_intern(attr->transit);
+		if (attr->encap_subtlvs)
+			attr->encap_subtlvs = encap_intern(attr->encap_subtlvs,
+							   ENCAP_SUBTLV_TYPE);
+#if ENABLE_BGP_VNC
+		if (attr->vnc_subtlvs)
+			attr->vnc_subtlvs = encap_intern(attr->vnc_subtlvs,
+							 VNC_SUBTLV_TYPE);
+#endif
+	} else {
+		if (attr->transit) {
+			transit_free(attr->transit);
+			attr->transit = NULL;
+		}
+
+		bgp_attr_flush_encap(attr);
+	};
+
+	/* Sanity checks */
 	if (attr->transit)
-		attr->transit = transit_intern(attr->transit);
+		assert(attr->transit->refcnt > 0);
 	if (attr->encap_subtlvs)
-		attr->encap_subtlvs =
-			encap_intern(attr->encap_subtlvs, ENCAP_SUBTLV_TYPE);
+		assert(attr->encap_subtlvs->refcnt > 0);
 #if ENABLE_BGP_VNC
 	if (attr->vnc_subtlvs)
-		attr->vnc_subtlvs =
-			encap_intern(attr->vnc_subtlvs, VNC_SUBTLV_TYPE);
+		assert(attr->vnc_subtlvs->refcnt > 0);
 #endif
 
-	return BGP_ATTR_PARSE_PROCEED;
+	return ret;
 }
 
 /*
@@ -2958,8 +3301,11 @@ size_t bgp_packet_mpattr_start(struct stream *s, struct peer *peer, afi_t afi,
 	// TODO Basil
 	/* Nexthop AFI */
 	if (afi == AFI_IP
-	    && (safi == SAFI_UNICAST || safi == SAFI_LABELED_UNICAST))
+	    && (safi == SAFI_UNICAST || safi == SAFI_LABELED_UNICAST
+		|| safi == SAFI_MPLS_VPN || safi == SAFI_MULTICAST))
 		nh_afi = peer_cap_enhe(peer, afi, safi) ? AFI_IP6 : AFI_IP;
+	else if (safi == SAFI_FLOWSPEC)
+		nh_afi = afi;
 	else
 		nh_afi = BGP_NEXTHOP_AFI_FROM_NHLEN(attr->mp_nexthop_len);
 
@@ -2986,7 +3332,12 @@ size_t bgp_packet_mpattr_start(struct stream *s, struct peer *peer, afi_t afi,
 			stream_put(s, &attr->mp_nexthop_global_in, 4);
 			break;
 		case SAFI_FLOWSPEC:
-			stream_putc(s, 0); /* no nexthop for flowspec */
+			if (attr->mp_nexthop_len == 0)
+				stream_putc(s, 0); /* no nexthop for flowspec */
+			else {
+				stream_putc(s, attr->mp_nexthop_len);
+				stream_put_ipv4(s, attr->nexthop.s_addr);
+			}
 		default:
 			break;
 		}
@@ -3080,13 +3431,9 @@ void bgp_packet_mpattr_prefix(struct stream *s, afi_t afi, safi_t safi,
 		stream_put_labeled_prefix(s, p, label, addpath_encode,
 					  addpath_tx_id);
 	} else if (safi == SAFI_FLOWSPEC) {
-		if (PSIZE (p->prefixlen)+2 < FLOWSPEC_NLRI_SIZELIMIT)
-			stream_putc(s, PSIZE (p->prefixlen)+2);
-		else
-			stream_putw(s, (PSIZE (p->prefixlen)+2)|(0xf<<12));
-		stream_putc(s, 2);/* Filter type */
-		stream_putc(s, p->prefixlen);/* Prefix length */
-		stream_put(s, &p->u.prefix, PSIZE (p->prefixlen));
+		stream_putc(s, p->u.prefix_flowspec.prefixlen);
+		stream_put(s, (const void *)p->u.prefix_flowspec.ptr,
+			   p->u.prefix_flowspec.prefixlen);
 	} else
 		stream_put_prefix_addpath(s, p, addpath_encode, addpath_tx_id);
 }
@@ -3894,6 +4241,36 @@ bgp_size_t bgp_packet_attribute(struct bgp *bgp, struct peer *peer,
 		}
 	}
 
+	/* SRv6 Service Information Attribute. */
+	if (afi == AFI_IP && safi == SAFI_MPLS_VPN) {
+		if (attr->srv6_l3vpn) {
+			stream_putc(s, BGP_ATTR_FLAG_OPTIONAL
+					       | BGP_ATTR_FLAG_TRANS);
+			stream_putc(s, BGP_ATTR_PREFIX_SID);
+			stream_putc(s, 24);     /* tlv len */
+			stream_putc(s, BGP_PREFIX_SID_SRV6_L3_SERVICE);
+			stream_putw(s, 21);     /* sub-tlv len */
+			stream_putc(s, 0);      /* reserved */
+			stream_put(s, &attr->srv6_l3vpn->sid,
+				   sizeof(attr->srv6_l3vpn->sid)); /* sid */
+			stream_putc(s, 0);      /* sid_flags */
+			stream_putw(s, 0xffff); /* endpoint */
+			stream_putc(s, 0);      /* reserved */
+		} else if (attr->srv6_vpn) {
+			stream_putc(s, BGP_ATTR_FLAG_OPTIONAL
+					       | BGP_ATTR_FLAG_TRANS);
+			stream_putc(s, BGP_ATTR_PREFIX_SID);
+			stream_putc(s, 22);     /* tlv len */
+			stream_putc(s, BGP_PREFIX_SID_VPN_SID);
+			stream_putw(s, 0x13);   /* tlv len */
+			stream_putc(s, 0x00);   /* reserved */
+			stream_putc(s, 0x01);   /* sid_type */
+			stream_putc(s, 0x00);   /* sif_flags */
+			stream_put(s, &attr->srv6_vpn->sid,
+				   sizeof(attr->srv6_vpn->sid)); /* sid */
+		}
+	}
+
 	if (send_as4_path) {
 		/* If the peer is NOT As4 capable, AND */
 		/* there are ASnums > 65535 in path  THEN
@@ -4022,6 +4399,7 @@ void bgp_attr_init(void)
 	cluster_init();
 	transit_init();
 	encap_init();
+	srv6_init();
 }
 
 void bgp_attr_finish(void)
@@ -4034,6 +4412,7 @@ void bgp_attr_finish(void)
 	cluster_finish();
 	transit_finish();
 	encap_finish();
+	srv6_finish();
 }
 
 /* Make attribute packet. */

@@ -1489,10 +1489,7 @@ void rfapiFreeBgpTeaOptionChain(struct bgp_tea_options *p)
 	while (p) {
 		next = p->next;
 
-		if (p->value) {
-			XFREE(MTYPE_BGP_TEA_OPTIONS_VALUE, p->value);
-			p->value = NULL;
-		}
+		XFREE(MTYPE_BGP_TEA_OPTIONS_VALUE, p->value);
 		XFREE(MTYPE_BGP_TEA_OPTIONS, p);
 
 		p = next;
@@ -3190,12 +3187,8 @@ DEFUN (debug_rfapi_register_vn_un_l2o,
 		return CMD_WARNING_CONFIG_FAILED;
 	}
 	optary[opt_next].type = RFAPI_VN_OPTION_TYPE_L2ADDR;
-	if (opt_next) {
-		optary[opt_next - 1].next = optary + opt_next;
-	} else {
-		opt = optary;
-	}
-	++opt_next;
+	opt = optary;
+
 	/* L2 option parsing END */
 
 	/* TBD fixme */

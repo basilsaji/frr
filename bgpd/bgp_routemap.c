@@ -334,9 +334,12 @@ static void route_match_peer_free(void *rule)
 }
 
 /* Route map commands for ip address matching. */
-struct route_map_rule_cmd route_match_peer_cmd = {"peer", route_match_peer,
-						  route_match_peer_compile,
-						  route_match_peer_free};
+static const struct route_map_rule_cmd route_match_peer_cmd = {
+	"peer",
+	route_match_peer,
+	route_match_peer_compile,
+	route_match_peer_free
+};
 
 #if defined(HAVE_LUA)
 static enum route_map_cmd_result_t
@@ -425,7 +428,7 @@ route_match_command_free(void *rule)
 	XFREE(MTYPE_ROUTE_MAP_COMPILED, rule);
 }
 
-struct route_map_rule_cmd route_match_command_cmd = {
+static const struct route_map_rule_cmd route_match_command_cmd = {
 	"command",
 	route_match_command,
 	route_match_command_compile,
@@ -469,9 +472,12 @@ static void route_match_ip_address_free(void *rule)
 }
 
 /* Route map commands for ip address matching. */
-struct route_map_rule_cmd route_match_ip_address_cmd = {
-	"ip address", route_match_ip_address, route_match_ip_address_compile,
-	route_match_ip_address_free};
+static const struct route_map_rule_cmd route_match_ip_address_cmd = {
+	"ip address",
+	route_match_ip_address,
+	route_match_ip_address_compile,
+	route_match_ip_address_free
+};
 
 /* `match ip next-hop IP_ADDRESS' */
 
@@ -515,9 +521,12 @@ static void route_match_ip_next_hop_free(void *rule)
 }
 
 /* Route map commands for ip next-hop matching. */
-struct route_map_rule_cmd route_match_ip_next_hop_cmd = {
-	"ip next-hop", route_match_ip_next_hop, route_match_ip_next_hop_compile,
-	route_match_ip_next_hop_free};
+static const struct route_map_rule_cmd route_match_ip_next_hop_cmd = {
+	"ip next-hop",
+	route_match_ip_next_hop,
+	route_match_ip_next_hop_compile,
+	route_match_ip_next_hop_free
+};
 
 /* `match ip route-source ACCESS-LIST' */
 
@@ -567,9 +576,12 @@ static void route_match_ip_route_source_free(void *rule)
 }
 
 /* Route map commands for ip route-source matching. */
-struct route_map_rule_cmd route_match_ip_route_source_cmd = {
-	"ip route-source", route_match_ip_route_source,
-	route_match_ip_route_source_compile, route_match_ip_route_source_free};
+static const struct route_map_rule_cmd route_match_ip_route_source_cmd = {
+	"ip route-source",
+	route_match_ip_route_source,
+	route_match_ip_route_source_compile,
+	route_match_ip_route_source_free
+};
 
 static enum route_map_cmd_result_t
 route_match_prefix_list_flowspec(afi_t afi, struct prefix_list *plist,
@@ -643,10 +655,13 @@ static void route_match_ip_address_prefix_list_free(void *rule)
 	XFREE(MTYPE_ROUTE_MAP_COMPILED, rule);
 }
 
-struct route_map_rule_cmd route_match_ip_address_prefix_list_cmd = {
-	"ip address prefix-list", route_match_ip_address_prefix_list,
+static const struct route_map_rule_cmd
+		route_match_ip_address_prefix_list_cmd = {
+	"ip address prefix-list",
+	route_match_ip_address_prefix_list,
 	route_match_ip_address_prefix_list_compile,
-	route_match_ip_address_prefix_list_free};
+	route_match_ip_address_prefix_list_free
+};
 
 /* `match ip next-hop prefix-list PREFIX_LIST' */
 
@@ -685,10 +700,13 @@ static void route_match_ip_next_hop_prefix_list_free(void *rule)
 	XFREE(MTYPE_ROUTE_MAP_COMPILED, rule);
 }
 
-struct route_map_rule_cmd route_match_ip_next_hop_prefix_list_cmd = {
-	"ip next-hop prefix-list", route_match_ip_next_hop_prefix_list,
+static const struct route_map_rule_cmd
+		route_match_ip_next_hop_prefix_list_cmd = {
+	"ip next-hop prefix-list",
+	route_match_ip_next_hop_prefix_list,
 	route_match_ip_next_hop_prefix_list_compile,
-	route_match_ip_next_hop_prefix_list_free};
+	route_match_ip_next_hop_prefix_list_free
+};
 
 /* `match ip next-hop type <blackhole>' */
 
@@ -724,10 +742,13 @@ static void route_match_ip_next_hop_type_free(void *rule)
 	XFREE(MTYPE_ROUTE_MAP_COMPILED, rule);
 }
 
-static struct route_map_rule_cmd route_match_ip_next_hop_type_cmd = {
-	"ip next-hop type", route_match_ip_next_hop_type,
+static const struct route_map_rule_cmd
+		route_match_ip_next_hop_type_cmd = {
+	"ip next-hop type",
+	route_match_ip_next_hop_type,
 	route_match_ip_next_hop_type_compile,
-	route_match_ip_next_hop_type_free};
+	route_match_ip_next_hop_type_free
+};
 
 /* `match ip route-source prefix-list PREFIX_LIST' */
 
@@ -773,10 +794,13 @@ static void route_match_ip_route_source_prefix_list_free(void *rule)
 	XFREE(MTYPE_ROUTE_MAP_COMPILED, rule);
 }
 
-struct route_map_rule_cmd route_match_ip_route_source_prefix_list_cmd = {
-	"ip route-source prefix-list", route_match_ip_route_source_prefix_list,
+static const struct route_map_rule_cmd
+		route_match_ip_route_source_prefix_list_cmd = {
+	"ip route-source prefix-list",
+	route_match_ip_route_source_prefix_list,
 	route_match_ip_route_source_prefix_list_compile,
-	route_match_ip_route_source_prefix_list_free};
+	route_match_ip_route_source_prefix_list_free
+};
 
 /* `match evpn default-route' */
 
@@ -792,8 +816,13 @@ route_match_evpn_default_route(void *rule, const struct prefix *p,
 }
 
 /* Route map commands for default-route matching. */
-struct route_map_rule_cmd route_match_evpn_default_route_cmd = {
-	"evpn default-route", route_match_evpn_default_route, NULL, NULL};
+static const struct route_map_rule_cmd
+		route_match_evpn_default_route_cmd = {
+	"evpn default-route",
+	route_match_evpn_default_route,
+	NULL,
+	NULL
+};
 
 /* `match mac address MAC_ACCESS_LIST' */
 
@@ -840,9 +869,12 @@ static void route_match_mac_address_free(void *rule)
 }
 
 /* Route map commands for mac address matching. */
-struct route_map_rule_cmd route_match_mac_address_cmd = {
-	"mac address", route_match_mac_address, route_match_mac_address_compile,
-	route_match_mac_address_free};
+static const struct route_map_rule_cmd route_match_mac_address_cmd = {
+	"mac address",
+	route_match_mac_address,
+	route_match_mac_address_compile,
+	route_match_mac_address_free
+};
 
 /*
  * Match function returns:
@@ -917,9 +949,12 @@ static void route_match_vni_free(void *rule)
 }
 
 /* Route map commands for vni matching. */
-struct route_map_rule_cmd route_match_evpn_vni_cmd = {
-	"evpn vni", route_match_vni, route_match_vni_compile,
-	route_match_vni_free};
+static const struct route_map_rule_cmd route_match_evpn_vni_cmd = {
+	"evpn vni",
+	route_match_vni,
+	route_match_vni_compile,
+	route_match_vni_free
+};
 
 /* `match evpn route-type' */
 
@@ -965,9 +1000,72 @@ static void route_match_evpn_route_type_free(void *rule)
 }
 
 /* Route map commands for evpn route-type  matching. */
-struct route_map_rule_cmd route_match_evpn_route_type_cmd = {
-	"evpn route-type", route_match_evpn_route_type,
-	route_match_evpn_route_type_compile, route_match_evpn_route_type_free};
+static const struct route_map_rule_cmd route_match_evpn_route_type_cmd = {
+	"evpn route-type",
+	route_match_evpn_route_type,
+	route_match_evpn_route_type_compile,
+	route_match_evpn_route_type_free
+};
+
+/* `match rd' */
+
+/* Match function should return 1 if match is success else return zero. */
+static enum route_map_cmd_result_t
+route_match_rd(void *rule, const struct prefix *prefix,
+	       route_map_object_t type, void *object)
+{
+	struct prefix_rd *prd_rule = NULL;
+	struct prefix_rd *prd_route = NULL;
+	struct bgp_path_info *path = NULL;
+
+	if (type == RMAP_BGP) {
+		if (prefix->family != AF_EVPN)
+			return RMAP_NOMATCH;
+
+		prd_rule = (struct prefix_rd *)rule;
+		path = (struct bgp_path_info *)object;
+
+		if (path->net == NULL || path->net->prn == NULL)
+			return RMAP_NOMATCH;
+
+		prd_route = (struct prefix_rd *)&path->net->prn->p;
+		if (memcmp(prd_route->val, prd_rule->val, ECOMMUNITY_SIZE) == 0)
+			return RMAP_MATCH;
+	}
+
+	return RMAP_NOMATCH;
+}
+
+/* Route map `rd' match statement. */
+static void *route_match_rd_compile(const char *arg)
+{
+	struct prefix_rd *prd;
+	int ret;
+
+	prd = XMALLOC(MTYPE_ROUTE_MAP_COMPILED, sizeof(struct prefix_rd));
+
+	ret = str2prefix_rd(arg, prd);
+	if (!ret) {
+		XFREE(MTYPE_ROUTE_MAP_COMPILED, prd);
+		return NULL;
+	}
+
+	return prd;
+}
+
+/* Free route map's compiled `rd' value. */
+static void route_match_rd_free(void *rule)
+{
+	XFREE(MTYPE_ROUTE_MAP_COMPILED, rule);
+}
+
+/* Route map commands for rd matching. */
+static const struct route_map_rule_cmd route_match_evpn_rd_cmd = {
+	"evpn rd",
+	route_match_rd,
+	route_match_rd_compile,
+	route_match_rd_free
+};
 
 /* Route map commands for VRF route leak with source vrf matching */
 static enum route_map_cmd_result_t
@@ -1011,10 +1109,12 @@ static void route_match_vrl_source_vrf_free(void *rule)
 	XFREE(MTYPE_ROUTE_MAP_COMPILED, rule);
 }
 
-struct route_map_rule_cmd route_match_vrl_source_vrf_cmd = {
-	"source-vrf", route_match_vrl_source_vrf,
+static const struct route_map_rule_cmd route_match_vrl_source_vrf_cmd = {
+	"source-vrf",
+	route_match_vrl_source_vrf,
 	route_match_vrl_source_vrf_compile,
-	route_match_vrl_source_vrf_free};
+	route_match_vrl_source_vrf_free
+};
 
 /* `match local-preference LOCAL-PREF' */
 
@@ -1038,8 +1138,10 @@ route_match_local_pref(void *rule, const struct prefix *prefix,
 	return RMAP_NOMATCH;
 }
 
-/* Route map `match local-preference' match statement.
-   `arg' is local-pref value */
+/*
+ * Route map `match local-preference' match statement.
+ * `arg' is local-pref value
+ */
 static void *route_match_local_pref_compile(const char *arg)
 {
 	uint32_t *local_pref;
@@ -1068,9 +1170,12 @@ static void route_match_local_pref_free(void *rule)
 }
 
 /* Route map commands for metric matching. */
-struct route_map_rule_cmd route_match_local_pref_cmd = {
-	"local-preference", route_match_local_pref,
-	route_match_local_pref_compile, route_match_local_pref_free};
+static const struct route_map_rule_cmd route_match_local_pref_cmd = {
+	"local-preference",
+	route_match_local_pref,
+	route_match_local_pref_compile,
+	route_match_local_pref_free
+};
 
 /* `match metric METRIC' */
 
@@ -1091,8 +1196,11 @@ route_match_metric(void *rule, const struct prefix *prefix,
 }
 
 /* Route map commands for metric matching. */
-struct route_map_rule_cmd route_match_metric_cmd = {
-	"metric", route_match_metric, route_value_compile, route_value_free,
+static const struct route_map_rule_cmd route_match_metric_cmd = {
+	"metric",
+	route_match_metric,
+	route_value_compile,
+	route_value_free,
 };
 
 /* `match as-path ASPATH' */
@@ -1135,9 +1243,12 @@ static void route_match_aspath_free(void *rule)
 }
 
 /* Route map commands for aspath matching. */
-struct route_map_rule_cmd route_match_aspath_cmd = {
-	"as-path", route_match_aspath, route_match_aspath_compile,
-	route_match_aspath_free};
+static const struct route_map_rule_cmd route_match_aspath_cmd = {
+	"as-path",
+	route_match_aspath,
+	route_match_aspath_compile,
+	route_match_aspath_free
+};
 
 /* `match community COMMUNIY' */
 struct rmap_community {
@@ -1227,9 +1338,13 @@ static void *route_match_get_community_key(void *rule)
 
 
 /* Route map commands for community matching. */
-struct route_map_rule_cmd route_match_community_cmd = {
-	"community", route_match_community, route_match_community_compile,
-	route_match_community_free, route_match_get_community_key};
+static const struct route_map_rule_cmd route_match_community_cmd = {
+	"community",
+	route_match_community,
+	route_match_community_compile,
+	route_match_community_free,
+	route_match_get_community_key
+};
 
 /* Match function for lcommunity match. */
 static enum route_map_cmd_result_t
@@ -1298,10 +1413,13 @@ static void route_match_lcommunity_free(void *rule)
 }
 
 /* Route map commands for community matching. */
-struct route_map_rule_cmd route_match_lcommunity_cmd = {
-	"large-community", route_match_lcommunity,
-	route_match_lcommunity_compile, route_match_lcommunity_free,
-	route_match_get_community_key};
+static const struct route_map_rule_cmd route_match_lcommunity_cmd = {
+	"large-community",
+	route_match_lcommunity,
+	route_match_lcommunity_compile,
+	route_match_lcommunity_free,
+	route_match_get_community_key
+};
 
 
 /* Match function for extcommunity match. */
@@ -1350,9 +1468,12 @@ static void route_match_ecommunity_free(void *rule)
 }
 
 /* Route map commands for community matching. */
-struct route_map_rule_cmd route_match_ecommunity_cmd = {
-	"extcommunity", route_match_ecommunity, route_match_ecommunity_compile,
-	route_match_ecommunity_free};
+static const struct route_map_rule_cmd route_match_ecommunity_cmd = {
+	"extcommunity",
+	route_match_ecommunity,
+	route_match_ecommunity_compile,
+	route_match_ecommunity_free
+};
 
 /* `match nlri` and `set nlri` are replaced by `address-family ipv4`
    and `address-family vpnv4'.  */
@@ -1399,9 +1520,12 @@ static void route_match_origin_free(void *rule)
 }
 
 /* Route map commands for origin matching. */
-struct route_map_rule_cmd route_match_origin_cmd = {
-	"origin", route_match_origin, route_match_origin_compile,
-	route_match_origin_free};
+static const struct route_map_rule_cmd route_match_origin_cmd = {
+	"origin",
+	route_match_origin,
+	route_match_origin_compile,
+	route_match_origin_free
+};
 
 /* match probability  { */
 
@@ -1452,9 +1576,12 @@ static void route_match_probability_free(void *rule)
 	XFREE(MTYPE_ROUTE_MAP_COMPILED, rule);
 }
 
-struct route_map_rule_cmd route_match_probability_cmd = {
-	"probability", route_match_probability, route_match_probability_compile,
-	route_match_probability_free};
+static const struct route_map_rule_cmd route_match_probability_cmd = {
+	"probability",
+	route_match_probability,
+	route_match_probability_compile,
+	route_match_probability_free
+};
 
 /* `match interface IFNAME' */
 /* Match function should return 1 if match is success else return
@@ -1496,9 +1623,12 @@ static void route_match_interface_free(void *rule)
 }
 
 /* Route map commands for ip address matching. */
-struct route_map_rule_cmd route_match_interface_cmd = {
-	"interface", route_match_interface, route_match_interface_compile,
-	route_match_interface_free};
+static const struct route_map_rule_cmd route_match_interface_cmd = {
+	"interface",
+	route_match_interface,
+	route_match_interface_compile,
+	route_match_interface_free
+};
 
 /* } */
 
@@ -1524,8 +1654,10 @@ route_match_tag(void *rule, const struct prefix *prefix,
 
 
 /* Route map commands for tag matching. */
-static struct route_map_rule_cmd route_match_tag_cmd = {
-	"tag", route_match_tag, route_map_rule_tag_compile,
+static const struct route_map_rule_cmd route_match_tag_cmd = {
+	"tag",
+	route_match_tag,
+	route_map_rule_tag_compile,
 	route_map_rule_tag_free,
 };
 
@@ -1573,7 +1705,7 @@ route_set_ip_nexthop(void *rule, const struct prefix *prefix,
 			 */
 			SET_FLAG(path->attr->rmap_change_flags,
 				 BATTR_RMAP_NEXTHOP_PEER_ADDRESS);
-			path->attr->nexthop.s_addr = 0;
+			path->attr->nexthop.s_addr = INADDR_ANY;
 		}
 	} else {
 		/* Set next hop value. */
@@ -1635,9 +1767,12 @@ static void route_set_ip_nexthop_free(void *rule)
 }
 
 /* Route map commands for ip nexthop set. */
-struct route_map_rule_cmd route_set_ip_nexthop_cmd = {
-	"ip next-hop", route_set_ip_nexthop, route_set_ip_nexthop_compile,
-	route_set_ip_nexthop_free};
+static const struct route_map_rule_cmd route_set_ip_nexthop_cmd = {
+	"ip next-hop",
+	route_set_ip_nexthop,
+	route_set_ip_nexthop_compile,
+	route_set_ip_nexthop_free
+};
 
 /* `set local-preference LOCAL_PREF' */
 
@@ -1668,8 +1803,10 @@ route_set_local_pref(void *rule, const struct prefix *prefix,
 }
 
 /* Set local preference rule structure. */
-struct route_map_rule_cmd route_set_local_pref_cmd = {
-	"local-preference", route_set_local_pref, route_value_compile,
+static const struct route_map_rule_cmd route_set_local_pref_cmd = {
+	"local-preference",
+	route_set_local_pref,
+	route_value_compile,
 	route_value_free,
 };
 
@@ -1696,8 +1833,11 @@ route_set_weight(void *rule, const struct prefix *prefix,
 }
 
 /* Set local preference rule structure. */
-struct route_map_rule_cmd route_set_weight_cmd = {
-	"weight", route_set_weight, route_value_compile, route_value_free,
+static const struct route_map_rule_cmd route_set_weight_cmd = {
+	"weight",
+	route_set_weight,
+	route_value_compile,
+	route_value_free,
 };
 
 /* `set distance DISTANCE */
@@ -1717,7 +1857,7 @@ route_set_distance(void *rule, const struct prefix *prefix,
 }
 
 /* set distance rule structure */
-struct route_map_rule_cmd route_set_distance_cmd = {
+static const struct route_map_rule_cmd route_set_distance_cmd = {
 	"distance",
 	route_set_distance,
 	route_value_compile,
@@ -1750,8 +1890,11 @@ route_set_metric(void *rule, const struct prefix *prefix,
 }
 
 /* Set metric rule structure. */
-struct route_map_rule_cmd route_set_metric_cmd = {
-	"metric", route_set_metric, route_value_compile, route_value_free,
+static const struct route_map_rule_cmd route_set_metric_cmd = {
+	"metric",
+	route_set_metric,
+	route_value_compile,
+	route_value_free,
 };
 
 /* `set table (1-4294967295)' */
@@ -1775,9 +1918,11 @@ static enum route_map_cmd_result_t route_set_table_id(void *rule,
 }
 
 /* Set table_id rule structure. */
-static struct route_map_rule_cmd route_set_table_id_cmd = {
-	"table", route_set_table_id,
-	route_value_compile, route_value_free
+static const struct route_map_rule_cmd route_set_table_id_cmd = {
+	"table",
+	route_set_table_id,
+	route_value_compile,
+	route_value_free
 };
 
 /* `set as-path prepend ASPATH' */
@@ -1833,9 +1978,11 @@ static void route_set_aspath_prepend_free(void *rule)
 
 
 /* Set as-path prepend rule structure. */
-struct route_map_rule_cmd route_set_aspath_prepend_cmd = {
-	"as-path prepend", route_set_aspath_prepend,
-	route_set_aspath_prepend_compile, route_set_aspath_prepend_free,
+static const struct route_map_rule_cmd route_set_aspath_prepend_cmd = {
+	"as-path prepend",
+	route_set_aspath_prepend,
+	route_set_aspath_prepend_compile,
+	route_set_aspath_prepend_free,
 };
 
 /* `set as-path exclude ASn' */
@@ -1866,8 +2013,10 @@ route_set_aspath_exclude(void *rule, const struct prefix *dummy,
 }
 
 /* Set ASn exlude rule structure. */
-struct route_map_rule_cmd route_set_aspath_exclude_cmd = {
-	"as-path exclude", route_set_aspath_exclude, route_aspath_compile,
+static const struct route_map_rule_cmd route_set_aspath_exclude_cmd = {
+	"as-path exclude",
+	route_set_aspath_exclude,
+	route_aspath_compile,
 	route_aspath_free,
 };
 
@@ -1980,8 +2129,10 @@ static void route_set_community_free(void *rule)
 }
 
 /* Set community rule structure. */
-struct route_map_rule_cmd route_set_community_cmd = {
-	"community", route_set_community, route_set_community_compile,
+static const struct route_map_rule_cmd route_set_community_cmd = {
+	"community",
+	route_set_community,
+	route_set_community_compile,
 	route_set_community_free,
 };
 
@@ -2098,8 +2249,10 @@ static void route_set_lcommunity_free(void *rule)
 }
 
 /* Set community rule structure. */
-struct route_map_rule_cmd route_set_lcommunity_cmd = {
-	"large-community", route_set_lcommunity, route_set_lcommunity_compile,
+static const struct route_map_rule_cmd route_set_lcommunity_cmd = {
+	"large-community",
+	route_set_lcommunity,
+	route_set_lcommunity_compile,
 	route_set_lcommunity_free,
 };
 
@@ -2187,9 +2340,11 @@ static void route_set_lcommunity_delete_free(void *rule)
 }
 
 /* Set lcommunity rule structure. */
-struct route_map_rule_cmd route_set_lcommunity_delete_cmd = {
-	"large-comm-list", route_set_lcommunity_delete,
-	route_set_lcommunity_delete_compile, route_set_lcommunity_delete_free,
+static const struct route_map_rule_cmd route_set_lcommunity_delete_cmd = {
+	"large-comm-list",
+	route_set_lcommunity_delete,
+	route_set_lcommunity_delete_compile,
+	route_set_lcommunity_delete_free,
 };
 
 
@@ -2277,9 +2432,11 @@ static void route_set_community_delete_free(void *rule)
 }
 
 /* Set community rule structure. */
-struct route_map_rule_cmd route_set_community_delete_cmd = {
-	"comm-list", route_set_community_delete,
-	route_set_community_delete_compile, route_set_community_delete_free,
+static const struct route_map_rule_cmd route_set_community_delete_cmd = {
+	"comm-list",
+	route_set_community_delete,
+	route_set_community_delete_compile,
+	route_set_community_delete_free,
 };
 
 /* `set extcommunity rt COMMUNITY' */
@@ -2344,9 +2501,11 @@ static void route_set_ecommunity_free(void *rule)
 }
 
 /* Set community rule structure. */
-struct route_map_rule_cmd route_set_ecommunity_rt_cmd = {
-	"extcommunity rt", route_set_ecommunity,
-	route_set_ecommunity_rt_compile, route_set_ecommunity_free,
+static const struct route_map_rule_cmd route_set_ecommunity_rt_cmd = {
+	"extcommunity rt",
+	route_set_ecommunity,
+	route_set_ecommunity_rt_compile,
+	route_set_ecommunity_free,
 };
 
 /* `set extcommunity soo COMMUNITY' */
@@ -2364,9 +2523,11 @@ static void *route_set_ecommunity_soo_compile(const char *arg)
 }
 
 /* Set community rule structure. */
-struct route_map_rule_cmd route_set_ecommunity_soo_cmd = {
-	"extcommunity soo", route_set_ecommunity,
-	route_set_ecommunity_soo_compile, route_set_ecommunity_free,
+static const struct route_map_rule_cmd route_set_ecommunity_soo_cmd = {
+	"extcommunity soo",
+	route_set_ecommunity,
+	route_set_ecommunity_soo_compile,
+	route_set_ecommunity_free,
 };
 
 /* `set origin ORIGIN' */
@@ -2413,8 +2574,10 @@ static void route_set_origin_free(void *rule)
 }
 
 /* Set origin rule structure. */
-struct route_map_rule_cmd route_set_origin_cmd = {
-	"origin", route_set_origin, route_set_origin_compile,
+static const struct route_map_rule_cmd route_set_origin_cmd = {
+	"origin",
+	route_set_origin,
+	route_set_origin_compile,
 	route_set_origin_free,
 };
 
@@ -2448,9 +2611,11 @@ static void route_set_atomic_aggregate_free(void *rule)
 }
 
 /* Set atomic aggregate rule structure. */
-struct route_map_rule_cmd route_set_atomic_aggregate_cmd = {
-	"atomic-aggregate", route_set_atomic_aggregate,
-	route_set_atomic_aggregate_compile, route_set_atomic_aggregate_free,
+static const struct route_map_rule_cmd route_set_atomic_aggregate_cmd = {
+	"atomic-aggregate",
+	route_set_atomic_aggregate,
+	route_set_atomic_aggregate_compile,
+	route_set_atomic_aggregate_free,
 };
 
 /* `set aggregator as AS A.B.C.D' */
@@ -2506,9 +2671,11 @@ static void route_set_aggregator_as_free(void *rule)
 	XFREE(MTYPE_ROUTE_MAP_COMPILED, rule);
 }
 
-struct route_map_rule_cmd route_set_aggregator_as_cmd = {
-	"aggregator as", route_set_aggregator_as,
-	route_set_aggregator_as_compile, route_set_aggregator_as_free,
+static const struct route_map_rule_cmd route_set_aggregator_as_cmd = {
+	"aggregator as",
+	route_set_aggregator_as,
+	route_set_aggregator_as_compile,
+	route_set_aggregator_as_free,
 };
 
 /* Set tag to object. object must be pointer to struct bgp_path_info */
@@ -2531,8 +2698,10 @@ route_set_tag(void *rule, const struct prefix *prefix,
 }
 
 /* Route map commands for tag set. */
-static struct route_map_rule_cmd route_set_tag_cmd = {
-	"tag", route_set_tag, route_map_rule_tag_compile,
+static const struct route_map_rule_cmd route_set_tag_cmd = {
+	"tag",
+	route_set_tag,
+	route_map_rule_tag_compile,
 	route_map_rule_tag_free,
 };
 
@@ -2562,8 +2731,10 @@ route_set_label_index(void *rule, const struct prefix *prefix,
 }
 
 /* Route map commands for label-index set. */
-static struct route_map_rule_cmd route_set_label_index_cmd = {
-	"label-index", route_set_label_index, route_value_compile,
+static const struct route_map_rule_cmd route_set_label_index_cmd = {
+	"label-index",
+	route_set_label_index,
+	route_value_compile,
 	route_value_free,
 };
 
@@ -2598,9 +2769,12 @@ static void route_match_ipv6_address_free(void *rule)
 }
 
 /* Route map commands for ip address matching. */
-struct route_map_rule_cmd route_match_ipv6_address_cmd = {
-	"ipv6 address", route_match_ipv6_address,
-	route_match_ipv6_address_compile, route_match_ipv6_address_free};
+static const struct route_map_rule_cmd route_match_ipv6_address_cmd = {
+	"ipv6 address",
+	route_match_ipv6_address,
+	route_match_ipv6_address_compile,
+	route_match_ipv6_address_free
+};
 
 /* `match ipv6 next-hop IP_ADDRESS' */
 
@@ -2649,9 +2823,12 @@ static void route_match_ipv6_next_hop_free(void *rule)
 	XFREE(MTYPE_ROUTE_MAP_COMPILED, rule);
 }
 
-struct route_map_rule_cmd route_match_ipv6_next_hop_cmd = {
-	"ipv6 next-hop", route_match_ipv6_next_hop,
-	route_match_ipv6_next_hop_compile, route_match_ipv6_next_hop_free};
+static const struct route_map_rule_cmd route_match_ipv6_next_hop_cmd = {
+	"ipv6 next-hop",
+	route_match_ipv6_next_hop,
+	route_match_ipv6_next_hop_compile,
+	route_match_ipv6_next_hop_free
+};
 
 /* `match ipv6 address prefix-list PREFIX_LIST' */
 
@@ -2673,10 +2850,13 @@ static void route_match_ipv6_address_prefix_list_free(void *rule)
 	XFREE(MTYPE_ROUTE_MAP_COMPILED, rule);
 }
 
-struct route_map_rule_cmd route_match_ipv6_address_prefix_list_cmd = {
-	"ipv6 address prefix-list", route_match_ipv6_address_prefix_list,
+static const struct route_map_rule_cmd
+		route_match_ipv6_address_prefix_list_cmd = {
+	"ipv6 address prefix-list",
+	route_match_ipv6_address_prefix_list,
 	route_match_ipv6_address_prefix_list_compile,
-	route_match_ipv6_address_prefix_list_free};
+	route_match_ipv6_address_prefix_list_free
+};
 
 /* `match ipv6 next-hop type <TYPE>' */
 
@@ -2720,10 +2900,13 @@ static void route_match_ipv6_next_hop_type_free(void *rule)
 	XFREE(MTYPE_ROUTE_MAP_COMPILED, rule);
 }
 
-struct route_map_rule_cmd route_match_ipv6_next_hop_type_cmd = {
-	"ipv6 next-hop type", route_match_ipv6_next_hop_type,
+static const struct route_map_rule_cmd
+		route_match_ipv6_next_hop_type_cmd = {
+	"ipv6 next-hop type",
+	route_match_ipv6_next_hop_type,
 	route_match_ipv6_next_hop_type_compile,
-	route_match_ipv6_next_hop_type_free};
+	route_match_ipv6_next_hop_type_free
+};
 
 /* `set ipv6 nexthop global IP_ADDRESS' */
 
@@ -2780,10 +2963,13 @@ static void route_set_ipv6_nexthop_global_free(void *rule)
 }
 
 /* Route map commands for ip nexthop set. */
-struct route_map_rule_cmd route_set_ipv6_nexthop_global_cmd = {
-	"ipv6 next-hop global", route_set_ipv6_nexthop_global,
+static const struct route_map_rule_cmd
+		route_set_ipv6_nexthop_global_cmd = {
+	"ipv6 next-hop global",
+	route_set_ipv6_nexthop_global,
 	route_set_ipv6_nexthop_global_compile,
-	route_set_ipv6_nexthop_global_free};
+	route_set_ipv6_nexthop_global_free
+};
 
 /* Set next-hop preference value. */
 static enum route_map_cmd_result_t
@@ -2830,10 +3016,13 @@ static void route_set_ipv6_nexthop_prefer_global_free(void *rule)
 }
 
 /* Route map commands for ip nexthop set preferred. */
-struct route_map_rule_cmd route_set_ipv6_nexthop_prefer_global_cmd = {
-	"ipv6 next-hop prefer-global", route_set_ipv6_nexthop_prefer_global,
+static const struct route_map_rule_cmd
+		route_set_ipv6_nexthop_prefer_global_cmd = {
+	"ipv6 next-hop prefer-global",
+	route_set_ipv6_nexthop_prefer_global,
 	route_set_ipv6_nexthop_prefer_global_compile,
-	route_set_ipv6_nexthop_prefer_global_free};
+	route_set_ipv6_nexthop_prefer_global_free
+};
 
 /* `set ipv6 nexthop local IP_ADDRESS' */
 
@@ -2892,10 +3081,13 @@ static void route_set_ipv6_nexthop_local_free(void *rule)
 }
 
 /* Route map commands for ip nexthop set. */
-struct route_map_rule_cmd route_set_ipv6_nexthop_local_cmd = {
-	"ipv6 next-hop local", route_set_ipv6_nexthop_local,
+static const struct route_map_rule_cmd
+		route_set_ipv6_nexthop_local_cmd = {
+	"ipv6 next-hop local",
+	route_set_ipv6_nexthop_local,
 	route_set_ipv6_nexthop_local_compile,
-	route_set_ipv6_nexthop_local_free};
+	route_set_ipv6_nexthop_local_free
+};
 
 /* `set ipv6 nexthop peer-address' */
 
@@ -2974,9 +3166,12 @@ static void route_set_ipv6_nexthop_peer_free(void *rule)
 }
 
 /* Route map commands for ip nexthop set. */
-struct route_map_rule_cmd route_set_ipv6_nexthop_peer_cmd = {
-	"ipv6 next-hop peer-address", route_set_ipv6_nexthop_peer,
-	route_set_ipv6_nexthop_peer_compile, route_set_ipv6_nexthop_peer_free};
+static const struct route_map_rule_cmd route_set_ipv6_nexthop_peer_cmd = {
+	"ipv6 next-hop peer-address",
+	route_set_ipv6_nexthop_peer,
+	route_set_ipv6_nexthop_peer_compile,
+	route_set_ipv6_nexthop_peer_free
+};
 
 /* `set ipv4 vpn next-hop A.B.C.D' */
 
@@ -3062,14 +3257,20 @@ static void route_set_vpn_nexthop_free(void *rule)
 }
 
 /* Route map commands for ipv4 next-hop set. */
-struct route_map_rule_cmd route_set_vpnv4_nexthop_cmd = {
-	"ipv4 vpn next-hop", route_set_vpnv4_nexthop,
-	route_set_vpnv4_nexthop_compile, route_set_vpn_nexthop_free};
+static const struct route_map_rule_cmd route_set_vpnv4_nexthop_cmd = {
+	"ipv4 vpn next-hop",
+	route_set_vpnv4_nexthop,
+	route_set_vpnv4_nexthop_compile,
+	route_set_vpn_nexthop_free
+};
 
 /* Route map commands for ipv6 next-hop set. */
-struct route_map_rule_cmd route_set_vpnv6_nexthop_cmd = {
-	"ipv6 vpn next-hop", route_set_vpnv6_nexthop,
-	route_set_vpnv6_nexthop_compile, route_set_vpn_nexthop_free};
+static const struct route_map_rule_cmd route_set_vpnv6_nexthop_cmd = {
+	"ipv6 vpn next-hop",
+	route_set_vpnv6_nexthop,
+	route_set_vpnv6_nexthop_compile,
+	route_set_vpn_nexthop_free
+};
 
 /* `set originator-id' */
 
@@ -3117,9 +3318,11 @@ static void route_set_originator_id_free(void *rule)
 }
 
 /* Set originator-id rule structure. */
-struct route_map_rule_cmd route_set_originator_id_cmd = {
-	"originator-id", route_set_originator_id,
-	route_set_originator_id_compile, route_set_originator_id_free,
+static const struct route_map_rule_cmd route_set_originator_id_cmd = {
+	"originator-id",
+	route_set_originator_id,
+	route_set_originator_id_compile,
+	route_set_originator_id_free,
 };
 
 /* Add bgp route map rule. */
@@ -3663,6 +3866,31 @@ DEFUN (no_match_evpn_default_route,
        "default EVPN type-5 route\n")
 {
 	return bgp_route_match_delete(vty, "evpn default-route", NULL,
+				      RMAP_EVENT_MATCH_DELETED);
+}
+
+DEFUN (match_evpn_rd,
+       match_evpn_rd_cmd,
+       "match evpn rd ASN:NN_OR_IP-ADDRESS:NN",
+       MATCH_STR
+       EVPN_HELP_STR
+       "Route Distinguisher\n"
+       "ASN:XX or A.B.C.D:XX\n")
+{
+	return bgp_route_match_add(vty, "evpn rd", argv[3]->arg,
+				   RMAP_EVENT_MATCH_ADDED);
+}
+
+DEFUN (no_match_evpn_rd,
+       no_match_evpn_rd_cmd,
+       "no match evpn rd ASN:NN_OR_IP-ADDRESS:NN",
+       NO_STR
+       MATCH_STR
+       EVPN_HELP_STR
+       "Route Distinguisher\n"
+       "ASN:XX or A.B.C.D:XX\n")
+{
+	return bgp_route_match_delete(vty, "evpn rd", argv[4]->arg,
 				      RMAP_EVENT_MATCH_DELETED);
 }
 
@@ -5216,6 +5444,7 @@ void bgp_route_map_init(void)
 	route_map_install_match(&route_match_mac_address_cmd);
 	route_map_install_match(&route_match_evpn_vni_cmd);
 	route_map_install_match(&route_match_evpn_route_type_cmd);
+	route_map_install_match(&route_match_evpn_rd_cmd);
 	route_map_install_match(&route_match_evpn_default_route_cmd);
 	route_map_install_match(&route_match_vrl_source_vrf_cmd);
 
@@ -5256,6 +5485,8 @@ void bgp_route_map_init(void)
 	install_element(RMAP_NODE, &no_match_evpn_vni_cmd);
 	install_element(RMAP_NODE, &match_evpn_route_type_cmd);
 	install_element(RMAP_NODE, &no_match_evpn_route_type_cmd);
+	install_element(RMAP_NODE, &match_evpn_rd_cmd);
+	install_element(RMAP_NODE, &no_match_evpn_rd_cmd);
 	install_element(RMAP_NODE, &match_evpn_default_route_cmd);
 	install_element(RMAP_NODE, &no_match_evpn_default_route_cmd);
 	install_element(RMAP_NODE, &match_vrl_source_vrf_cmd);

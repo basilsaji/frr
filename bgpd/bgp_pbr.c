@@ -754,13 +754,15 @@ int bgp_pbr_build_and_validate_entry(struct prefix *p,
 				 * draft-ietf-idr-flowspec-redirect
 				 */
 				if (api_action_redirect_ip) {
-					if (api_action_redirect_ip->u
-					    .zr.redirect_ip_v4.s_addr)
+					if (api_action_redirect_ip->u.zr
+						    .redirect_ip_v4.s_addr
+					    != INADDR_ANY)
 						continue;
-					if (!path->attr->nexthop.s_addr)
+					if (path->attr->nexthop.s_addr
+					    == INADDR_ANY)
 						continue;
-					api_action_redirect_ip->u
-						.zr.redirect_ip_v4.s_addr =
+					api_action_redirect_ip->u.zr
+						.redirect_ip_v4.s_addr =
 						path->attr->nexthop.s_addr;
 					api_action_redirect_ip->u.zr.duplicate
 						= ecom_eval->val[7];
@@ -1260,7 +1262,6 @@ void bgp_pbr_cleanup(struct bgp *bgp)
 		return;
 	bgp_pbr_reset(bgp, AFI_IP);
 	XFREE(MTYPE_PBR, bgp->bgp_pbr_cfg);
-	bgp->bgp_pbr_cfg = NULL;
 }
 
 void bgp_pbr_init(struct bgp *bgp)
@@ -1725,7 +1726,7 @@ static void bgp_pbr_policyroute_remove_from_zebra_unit(
 			temp.type = IPSET_NET_NET;
 	}
 	if (bpf->vrf_id == VRF_UNKNOWN) /* XXX case BGP destroy */
-		temp.vrf_id = 0;
+		temp.vrf_id = VRF_DEFAULT;
 	else
 		temp.vrf_id = bpf->vrf_id;
 	bpme = &temp2;

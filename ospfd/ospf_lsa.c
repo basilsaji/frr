@@ -290,7 +290,7 @@ void ospf_lsa_data_free(struct lsa_header *lsah)
 
 const char *dump_lsa_key(struct ospf_lsa *lsa)
 {
-	static char buf[] = {"Type255,id(255.255.255.255),ar(255.255.255.255)"};
+	static char buf[sizeof("Type255,id(255.255.255.255),ar(255.255.255.255)")+1];
 	struct lsa_header *lsah;
 
 	if (lsa != NULL && (lsah = lsa->data) != NULL) {
@@ -820,7 +820,7 @@ static struct ospf_lsa *ospf_router_lsa_originate(struct ospf_area *area)
 	}
 
 	/* Sanity check. */
-	if (new->data->adv_router.s_addr == 0) {
+	if (new->data->adv_router.s_addr == INADDR_ANY) {
 		if (IS_DEBUG_OSPF_EVENT)
 			zlog_debug("LSA[Type1]: AdvRouter is 0, discard");
 		ospf_lsa_discard(new);
@@ -1459,7 +1459,7 @@ struct in_addr ospf_get_ip_from_ifp(struct ospf_interface *oi)
 {
 	struct in_addr fwd;
 
-	fwd.s_addr = 0;
+	fwd.s_addr = INADDR_ANY;
 
 	if (if_is_operative(oi->ifp))
 		return oi->address->u.prefix4;
@@ -1931,7 +1931,7 @@ int is_prefix_default(struct prefix_ipv4 *p)
 	struct prefix_ipv4 q;
 
 	q.family = AF_INET;
-	q.prefix.s_addr = 0;
+	q.prefix.s_addr = INADDR_ANY;
 	q.prefixlen = 0;
 
 	return prefix_same((struct prefix *)p, (struct prefix *)&q);
@@ -1979,10 +1979,11 @@ struct ospf_lsa *ospf_external_lsa_originate(struct ospf *ospf,
 
 	   */
 
-	if (ospf->router_id.s_addr == 0) {
+	if (ospf->router_id.s_addr == INADDR_ANY) {
 		if (IS_DEBUG_OSPF_EVENT)
-			zlog_debug("LSA[Type5:%pI4]: deferring AS-external-LSA origination, router ID is zero",
-				   &ei->p.prefix);
+			zlog_debug(
+				"LSA[Type5:%pI4]: deferring AS-external-LSA origination, router ID is zero",
+				&ei->p.prefix);
 		return NULL;
 	}
 
@@ -2197,7 +2198,7 @@ void ospf_external_lsa_refresh_default(struct ospf *ospf)
 
 	p.family = AF_INET;
 	p.prefixlen = 0;
-	p.prefix.s_addr = 0;
+	p.prefix.s_addr = INADDR_ANY;
 
 	ei = ospf_default_external_info(ospf);
 	lsa = ospf_external_info_find_lsa(ospf, &p);
@@ -3202,45 +3203,6 @@ int ospf_lsa_different(struct ospf_lsa *l1, struct ospf_lsa *l2)
 	return 0;
 }
 
-#ifdef ORIGINAL_CODING
-void ospf_lsa_flush_self_originated(struct ospf_neighbor *nbr,
-				    struct ospf_lsa *self, struct ospf_lsa *new)
-{
-	uint32_t seqnum;
-
-	/* Adjust LS Sequence Number. */
-	seqnum = ntohl(new->data->ls_seqnum) + 1;
-	self->data->ls_seqnum = htonl(seqnum);
-
-	/* Recalculate LSA checksum. */
-	ospf_lsa_checksum(self->data);
-
-	/* Reflooding LSA. */
-	/*  RFC2328  Section 13.3
-		  On non-broadcast networks, separate	Link State Update
-		  packets must be sent, as unicasts, to each adjacent	neighbor
-		  (i.e., those in state Exchange or greater).	 The destination
-		  IP addresses for these packets are the neighbors' IP
-		  addresses.   */
-	if (nbr->oi->type == OSPF_IFTYPE_NBMA) {
-		struct route_node *rn;
-		struct ospf_neighbor *onbr;
-
-		for (rn = route_top(nbr->oi->nbrs); rn; rn = route_next(rn))
-			if ((onbr = rn->info) != NULL)
-				if (onbr != nbr->oi->nbr_self
-				    && onbr->status >= NSM_Exchange)
-					ospf_ls_upd_send_lsa(
-						onbr, self,
-						OSPF_SEND_PACKET_DIRECT);
-	} else
-		ospf_ls_upd_send_lsa(nbr, self, OSPF_SEND_PACKET_INDIRECT);
-
-	if (IS_DEBUG_OSPF(lsa, LSA_GENERATE))
-		zlog_debug("LSA[Type%d:%s]: Flush self-originated LSA",
-			   self->data->type, inet_ntoa(self->data->id));
-}
-#else  /* ORIGINAL_CODING */
 int ospf_lsa_flush_schedule(struct ospf *ospf, struct ospf_lsa *lsa)
 {
 	if (lsa == NULL || !IS_LSA_SELF(lsa))
@@ -3345,7 +3307,6 @@ void ospf_flush_self_originated_lsas_now(struct ospf *ospf)
 
 	return;
 }
-#endif /* ORIGINAL_CODING */
 
 /* If there is self-originated LSA, then return 1, otherwise return 0. */
 /* An interface-independent version of ospf_lsa_is_self_originated */

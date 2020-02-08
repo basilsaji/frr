@@ -356,7 +356,8 @@ static int process_unicast_route(struct bgp *bgp,		 /* in */
 	 * all of the possible returns above.
 	 */
 	memset(&hattr, 0, sizeof(struct attr));
-	bgp_attr_dup(&hattr, attr); /* hattr becomes a ghost attr */
+	/* hattr becomes a ghost attr */
+	hattr = *attr;
 
 	if (rmap) {
 		struct bgp_path_info info;
@@ -479,8 +480,6 @@ static void vnc_import_bgp_add_route_mode_resolve_nve_one_bi(
 	encaptlvs = bpi->attr->vnc_subtlvs;
 	if (bpi->attr->encap_tunneltype != BGP_ENCAP_TYPE_RESERVED
 	    && bpi->attr->encap_tunneltype != BGP_ENCAP_TYPE_MPLS) {
-		if (opt != NULL)
-			opt->next = &optary[cur_opt];
 		opt = &optary[cur_opt++];
 		memset(opt, 0, sizeof(struct rfapi_un_option));
 		opt->type = RFAPI_UN_OPTION_TYPE_TUNNELTYPE;
@@ -800,7 +799,8 @@ static void vnc_import_bgp_add_route_mode_plain(struct bgp *bgp,
 	 * all of the possible returns above.
 	 */
 	memset(&hattr, 0, sizeof(struct attr));
-	bgp_attr_dup(&hattr, attr); /* hattr becomes a ghost attr */
+	/* hattr becomes a ghost attr */
+	hattr = *attr;
 
 	if (rmap) {
 		struct bgp_path_info info;
@@ -1002,7 +1002,8 @@ vnc_import_bgp_add_route_mode_nvegroup(struct bgp *bgp, struct prefix *prefix,
 	 * all of the possible returns above.
 	 */
 	memset(&hattr, 0, sizeof(struct attr));
-	bgp_attr_dup(&hattr, attr); /* hattr becomes a ghost attr */
+	/* hattr becomes a ghost attr */
+	hattr = *attr;
 
 	if (rmap) {
 		struct bgp_path_info path;
@@ -1781,7 +1782,7 @@ static void vnc_import_bgp_exterior_add_route_it(
 
 				/* use local_pref from unicast route */
 				memset(&new_attr, 0, sizeof(struct attr));
-				bgp_attr_dup(&new_attr, bpi_interior->attr);
+				new_attr = *bpi_interior->attr;
 				if (info->attr->flag
 				    & ATTR_FLAG_BIT(BGP_ATTR_LOCAL_PREF)) {
 					new_attr.local_pref =
@@ -1809,8 +1810,7 @@ static void vnc_import_bgp_exterior_add_route_it(
 					RFAPI_MONITOR_EXTERIOR(rn)->source =
 						skiplist_new(
 							0, NULL,
-							(void (*)(void *))
-								prefix_free);
+							prefix_free_lists);
 					agg_lock_node(rn); /* for skiplist */
 				}
 				agg_lock_node(rn); /* for skiplist entry */
@@ -2107,7 +2107,7 @@ void vnc_import_bgp_exterior_add_route_interior(
 
 			/* use local_pref from unicast route */
 			memset(&new_attr, 0, sizeof(struct attr));
-			bgp_attr_dup(&new_attr, bpi_interior->attr);
+			new_attr = *bpi_interior->attr;
 			if (bpi_exterior
 			    && (bpi_exterior->attr->flag
 				& ATTR_FLAG_BIT(BGP_ATTR_LOCAL_PREF))) {
@@ -2196,8 +2196,7 @@ void vnc_import_bgp_exterior_add_route_interior(
 					     ->source) {
 					RFAPI_MONITOR_EXTERIOR(rn_interior)
 						->source = skiplist_new(
-						0, NULL,
-						(void (*)(void *))prefix_free);
+						0, NULL, prefix_free_lists);
 					agg_lock_node(rn_interior);
 				}
 				skiplist_insert(
@@ -2244,7 +2243,7 @@ void vnc_import_bgp_exterior_add_route_interior(
 
 				/* use local_pref from unicast route */
 				memset(&new_attr, 0, sizeof(struct attr));
-				bgp_attr_dup(&new_attr, bpi_interior->attr);
+				new_attr = *bpi_interior->attr;
 				if (bpi_exterior
 				    && (bpi_exterior->attr->flag
 					& ATTR_FLAG_BIT(BGP_ATTR_LOCAL_PREF))) {
@@ -2339,8 +2338,7 @@ void vnc_import_bgp_exterior_add_route_interior(
 			if (!RFAPI_MONITOR_EXTERIOR(rn_interior)->source) {
 				RFAPI_MONITOR_EXTERIOR(rn_interior)->source =
 					skiplist_new(
-						0, NULL,
-						(void (*)(void *))prefix_free);
+						0, NULL, prefix_free_lists);
 				agg_lock_node(rn_interior); /* sl */
 			}
 			skiplist_insert(
@@ -2365,7 +2363,7 @@ void vnc_import_bgp_exterior_add_route_interior(
 
 			/* use local_pref from unicast route */
 			memset(&new_attr, 0, sizeof(struct attr));
-			bgp_attr_dup(&new_attr, bpi_interior->attr);
+			new_attr = *bpi_interior->attr;
 			if (bpi_exterior
 			    && (bpi_exterior->attr->flag
 				& ATTR_FLAG_BIT(BGP_ATTR_LOCAL_PREF))) {
@@ -2529,8 +2527,7 @@ void vnc_import_bgp_exterior_del_route_interior(
 			if (!RFAPI_MONITOR_EXTERIOR(par)->source) {
 				RFAPI_MONITOR_EXTERIOR(par)->source =
 					skiplist_new(
-						0, NULL,
-						(void (*)(void *))prefix_free);
+						0, NULL, prefix_free_lists);
 				agg_lock_node(par); /* sl */
 			}
 			skiplist_insert(RFAPI_MONITOR_EXTERIOR(par)->source,
@@ -2556,7 +2553,7 @@ void vnc_import_bgp_exterior_del_route_interior(
 
 				/* use local_pref from unicast route */
 				memset(&new_attr, 0, sizeof(struct attr));
-				bgp_attr_dup(&new_attr, bpi->attr);
+				new_attr = *bpi->attr;
 				if (bpi_exterior
 				    && (bpi_exterior->attr->flag
 					& ATTR_FLAG_BIT(BGP_ATTR_LOCAL_PREF))) {

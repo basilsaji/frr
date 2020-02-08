@@ -278,12 +278,14 @@ static int bgp_ifp_down(struct interface *ifp)
 			 * 1-hop BFD
 			 * tracked (directly connected) IBGP peers.
 			 */
-			if ((peer->ttl != 1) && (peer->gtsm_hops != 1)
+			if ((peer->ttl != BGP_DEFAULT_TTL)
+			    && (peer->gtsm_hops != 1)
 			    && (!peer->bfd_info
 				|| bgp_bfd_is_peer_multihop(peer)))
 #else
 			/* Take down directly connected EBGP peers */
-			if ((peer->ttl != 1) && (peer->gtsm_hops != 1))
+			if ((peer->ttl != BGP_DEFAULT_TTL)
+			    && (peer->gtsm_hops != 1))
 #endif
 				continue;
 
@@ -357,7 +359,7 @@ static int bgp_interface_address_delete(ZAPI_CALLBACK_ARGS)
 		bgp_connected_delete(bgp, ifc);
 	}
 
-	connected_free(ifc);
+	connected_free(&ifc);
 
 	return 0;
 }
@@ -448,7 +450,8 @@ static int bgp_interface_vrf_update(ZAPI_CALLBACK_ARGS)
 		/* Fast external-failover */
 		if (!CHECK_FLAG(bgp->flags, BGP_FLAG_NO_FAST_EXT_FAILOVER)) {
 			for (ALL_LIST_ELEMENTS(bgp->peer, node, nnode, peer)) {
-				if ((peer->ttl != 1) && (peer->gtsm_hops != 1))
+				if ((peer->ttl != BGP_DEFAULT_TTL)
+				    && (peer->gtsm_hops != 1))
 					continue;
 
 				if (ifp == peer->nexthop.ifp)
@@ -816,7 +819,7 @@ bool bgp_zebra_nexthop_set(union sockunion *local, union sockunion *remote,
 
 		/* IPv4 nexthop. */
 		ret = if_get_ipv4_address(ifp, &nexthop->v4);
-		if (!ret && peer->local_id.s_addr)
+		if (!ret && peer->local_id.s_addr != INADDR_ANY)
 			nexthop->v4 = peer->local_id;
 
 		/* Global address*/
@@ -1069,7 +1072,7 @@ static int update_ipv4nh_for_route_install(int nh_othervrf,
 	 */
 	if (is_evpn) {
 		api_nh->type = NEXTHOP_TYPE_IPV4_IFINDEX;
-		api_nh->onlink = true;
+		SET_FLAG(api_nh->flags, ZAPI_NEXTHOP_FLAG_ONLINK);
 		api_nh->ifindex = nh_bgp->l3vni_svi_ifindex;
 	} else if (nh_othervrf &&
 		 api_nh->gate.ipv4.s_addr == INADDR_ANY) {
@@ -1095,7 +1098,7 @@ update_ipv6nh_for_route_install(int nh_othervrf, struct bgp *nh_bgp,
 
 	if (is_evpn) {
 		api_nh->type = NEXTHOP_TYPE_IPV6_IFINDEX;
-		api_nh->onlink = true;
+		SET_FLAG(api_nh->flags, ZAPI_NEXTHOP_FLAG_ONLINK);
 		api_nh->ifindex = nh_bgp->l3vni_svi_ifindex;
 	} else if (nh_othervrf) {
 		if (IN6_IS_ADDR_UNSPECIFIED(nexthop)) {
@@ -1222,7 +1225,7 @@ void bgp_zebra_announce(struct bgp_node *rn, struct prefix *p,
 		SET_FLAG(api.flags, ZEBRA_FLAG_ALLOW_RECURSION);
 	}
 
-	if ((peer->sort == BGP_PEER_EBGP && peer->ttl != 1)
+	if ((peer->sort == BGP_PEER_EBGP && peer->ttl != BGP_DEFAULT_TTL)
 	    || CHECK_FLAG(peer->flags, PEER_FLAG_DISABLE_CONNECTED_CHECK)
 	    || bgp_flag_check(bgp, BGP_FLAG_DISABLE_NH_CONNECTED_CHK))
 
@@ -1344,6 +1347,8 @@ void bgp_zebra_announce(struct bgp_node *rn, struct prefix *p,
 			has_valid_label = 1;
 			label = label_pton(&mpinfo->extra->label[0]);
 
+			SET_FLAG(api_nh->flags, ZAPI_NEXTHOP_FLAG_LABEL);
+
 			api_nh->label_num = 1;
 			api_nh->labels[0] = label;
 		}
@@ -1351,11 +1356,6 @@ void bgp_zebra_announce(struct bgp_node *rn, struct prefix *p,
 		       sizeof(struct ethaddr));
 		valid_nh_count++;
 	}
-
-
-	/* if this is a evpn route we don't have to include the label */
-	if (has_valid_label && !(CHECK_FLAG(api.flags, ZEBRA_FLAG_EVPN_ROUTE)))
-		SET_FLAG(api.message, ZAPI_MESSAGE_LABEL);
 
 	/*
 	 * When we create an aggregate route we must also
@@ -1384,6 +1384,8 @@ void bgp_zebra_announce(struct bgp_node *rn, struct prefix *p,
 	if (bgp_debug_zebra(p)) {
 		char prefix_buf[PREFIX_STRLEN];
 		char nh_buf[INET6_ADDRSTRLEN];
+		char eth_buf[ETHER_ADDR_STRLEN + 7] = {'\0'};
+		char buf1[ETHER_ADDR_STRLEN];
 		char label_buf[20];
 		int i;
 
@@ -1421,13 +1423,19 @@ void bgp_zebra_announce(struct bgp_node *rn, struct prefix *p,
 			}
 
 			label_buf[0] = '\0';
+			eth_buf[0] = '\0';
 			if (has_valid_label
 			    && !CHECK_FLAG(api.flags, ZEBRA_FLAG_EVPN_ROUTE))
-				sprintf(label_buf, "label %u",
-					api_nh->labels[0]);
-			zlog_debug("  nhop [%d]: %s if %u VRF %u %s",
+				snprintf(label_buf, sizeof(label_buf),
+					"label %u", api_nh->labels[0]);
+			if (CHECK_FLAG(api.flags, ZEBRA_FLAG_EVPN_ROUTE)
+			    && !is_zero_mac(&api_nh->rmac))
+				snprintf(eth_buf, sizeof(eth_buf), " RMAC %s",
+					 prefix_mac2str(&api_nh->rmac,
+							buf1, sizeof(buf1)));
+			zlog_debug("  nhop [%d]: %s if %u VRF %u %s %s",
 				   i + 1, nh_buf, api_nh->ifindex,
-				   api_nh->vrf_id, label_buf);
+				   api_nh->vrf_id, label_buf, eth_buf);
 		}
 	}
 
@@ -1690,7 +1698,7 @@ int bgp_redistribute_metric_set(struct bgp *bgp, struct bgp_redist *red,
 				struct attr *old_attr;
 				struct attr new_attr;
 
-				bgp_attr_dup(&new_attr, pi->attr);
+				new_attr = *pi->attr;
 				new_attr.med = red->redist_metric;
 				old_attr = pi->attr;
 				pi->attr = bgp_attr_intern(&new_attr);
@@ -1771,7 +1779,6 @@ int bgp_redistribute_unset(struct bgp *bgp, afi_t afi, int type,
 	/* Unset route-map. */
 	XFREE(MTYPE_ROUTE_MAP_NAME, red->rmap.name);
 	route_map_counter_decrement(red->rmap.map);
-	red->rmap.name = NULL;
 	red->rmap.map = NULL;
 
 	/* Unset metric. */
@@ -2429,6 +2436,7 @@ static void bgp_zebra_connected(struct zclient *zclient)
 	/* TODO - What if we have peers and networks configured, do we have to
 	 * kick-start them?
 	 */
+	BGP_GR_ROUTER_DETECT_AND_SEND_CAPABILITY_TO_ZEBRA(bgp, bgp->peer);
 }
 
 static int bgp_zebra_process_local_es(ZAPI_CALLBACK_ARGS)
@@ -2469,30 +2477,37 @@ static int bgp_zebra_process_local_l3vni(ZAPI_CALLBACK_ARGS)
 	int filter = 0;
 	char buf[ETHER_ADDR_STRLEN];
 	vni_t l3vni = 0;
-	struct ethaddr rmac;
+	struct ethaddr svi_rmac, vrr_rmac = {.octet = {0} };
 	struct in_addr originator_ip;
 	struct stream *s;
 	ifindex_t svi_ifindex;
+	bool is_anycast_mac = false;
+	char buf1[ETHER_ADDR_STRLEN];
 
-	memset(&rmac, 0, sizeof(struct ethaddr));
+	memset(&svi_rmac, 0, sizeof(struct ethaddr));
 	memset(&originator_ip, 0, sizeof(struct in_addr));
 	s = zclient->ibuf;
 	l3vni = stream_getl(s);
 	if (cmd == ZEBRA_L3VNI_ADD) {
-		stream_get(&rmac, s, sizeof(struct ethaddr));
+		stream_get(&svi_rmac, s, sizeof(struct ethaddr));
 		originator_ip.s_addr = stream_get_ipv4(s);
 		stream_get(&filter, s, sizeof(int));
 		svi_ifindex = stream_getl(s);
+		stream_get(&vrr_rmac, s, sizeof(struct ethaddr));
+		is_anycast_mac = stream_getl(s);
 
 		if (BGP_DEBUG(zebra, ZEBRA))
-			zlog_debug("Rx L3-VNI ADD VRF %s VNI %u RMAC %s filter %s svi-if %u",
+			zlog_debug("Rx L3-VNI ADD VRF %s VNI %u RMAC svi-mac %s vrr-mac %s filter %s svi-if %u",
 				   vrf_id_to_name(vrf_id), l3vni,
-				   prefix_mac2str(&rmac, buf, sizeof(buf)),
+				   prefix_mac2str(&svi_rmac, buf, sizeof(buf)),
+				   prefix_mac2str(&vrr_rmac, buf1,
+						  sizeof(buf1)),
 				   filter ? "prefix-routes-only" : "none",
 				   svi_ifindex);
 
-		bgp_evpn_local_l3vni_add(l3vni, vrf_id, &rmac, originator_ip,
-					 filter, svi_ifindex);
+		bgp_evpn_local_l3vni_add(l3vni, vrf_id, &svi_rmac, &vrr_rmac,
+					 originator_ip, filter, svi_ifindex,
+					 is_anycast_mac);
 	} else {
 		if (BGP_DEBUG(zebra, ZEBRA))
 			zlog_debug("Rx L3-VNI DEL VRF %s VNI %u",
@@ -2533,7 +2548,8 @@ static int bgp_zebra_process_local_vni(ZAPI_CALLBACK_ARGS)
 
 	if (cmd == ZEBRA_VNI_ADD)
 		return bgp_evpn_local_vni_add(
-			bgp, vni, vtep_ip.s_addr ? vtep_ip : bgp->router_id,
+			bgp, vni,
+			vtep_ip.s_addr != INADDR_ANY ? vtep_ip : bgp->router_id,
 			tenant_vrf_id, mcast_grp);
 	else
 		return bgp_evpn_local_vni_del(bgp, vni);
@@ -2960,7 +2976,7 @@ void bgp_zebra_announce_default(struct bgp *bgp, struct nexthop *nh,
 	SET_FLAG(api.message, ZAPI_MESSAGE_DISTANCE);
 
 	/* redirect IP */
-	if (nh->gate.ipv4.s_addr) {
+	if (nh->gate.ipv4.s_addr != INADDR_ANY) {
 		char buff[PREFIX_STRLEN];
 
 		api_nh->vrf_id = nh->vrf_id;
@@ -3000,4 +3016,121 @@ void bgp_zebra_announce_default(struct bgp *bgp, struct nexthop *nh,
 				   zclient, &api);
 		return;
 	}
+}
+
+/* Send capabilities to RIB */
+int bgp_zebra_send_capabilities(struct bgp *bgp, bool disable)
+{
+	struct zapi_cap api;
+	int ret = BGP_GR_SUCCESS;
+
+	if (zclient == NULL) {
+		if (BGP_DEBUG(zebra, ZEBRA))
+			zlog_debug("zclient invalid");
+		return BGP_GR_FAILURE;
+	}
+
+	/* Check if the client is connected */
+	if ((zclient->sock < 0) || (zclient->t_connect)) {
+		if (BGP_DEBUG(zebra, ZEBRA))
+			zlog_debug("client not connected");
+		return BGP_GR_FAILURE;
+	}
+
+	/* Check if capability is already sent. If the flag force is set
+	 * send the capability since this can be initial bgp configuration
+	 */
+	memset(&api, 0, sizeof(struct zapi_cap));
+	if (disable) {
+		api.cap = ZEBRA_CLIENT_GR_DISABLE;
+		api.vrf_id = bgp->vrf_id;
+	} else {
+		api.cap = ZEBRA_CLIENT_GR_CAPABILITIES;
+		api.stale_removal_time = bgp->rib_stale_time;
+		api.vrf_id = bgp->vrf_id;
+	}
+
+	if (zclient_capabilities_send(ZEBRA_CLIENT_CAPABILITIES, zclient, &api)
+	    < 0) {
+		zlog_err("error sending capability");
+		ret = BGP_GR_FAILURE;
+	} else {
+		if (disable)
+			bgp->present_zebra_gr_state = ZEBRA_GR_DISABLE;
+		else
+			bgp->present_zebra_gr_state = ZEBRA_GR_ENABLE;
+
+		if (BGP_DEBUG(zebra, ZEBRA))
+			zlog_debug("send capabilty success");
+		ret = BGP_GR_SUCCESS;
+	}
+	return ret;
+}
+
+/* Send route update pesding or completed status to RIB for the
+ * specific AFI, SAFI
+ */
+int bgp_zebra_update(afi_t afi, safi_t safi, vrf_id_t vrf_id, int type)
+{
+	struct zapi_cap api = {0};
+
+	if (zclient == NULL) {
+		if (BGP_DEBUG(zebra, ZEBRA))
+			zlog_debug("zclient == NULL, invalid");
+		return BGP_GR_FAILURE;
+	}
+
+	/* Check if the client is connected */
+	if ((zclient->sock < 0) || (zclient->t_connect)) {
+		if (BGP_DEBUG(zebra, ZEBRA))
+			zlog_debug("client not connected");
+		return BGP_GR_FAILURE;
+	}
+
+	api.afi = afi;
+	api.safi = safi;
+	api.vrf_id = vrf_id;
+	api.cap = type;
+
+	if (zclient_capabilities_send(ZEBRA_CLIENT_CAPABILITIES, zclient, &api)
+	    < 0) {
+		if (BGP_DEBUG(zebra, ZEBRA))
+			zlog_debug("error sending capability");
+		return BGP_GR_FAILURE;
+	}
+	return BGP_GR_SUCCESS;
+}
+
+
+/* Send RIB stale timer update */
+int bgp_zebra_stale_timer_update(struct bgp *bgp)
+{
+	struct zapi_cap api;
+
+	if (zclient == NULL) {
+		if (BGP_DEBUG(zebra, ZEBRA))
+			zlog_debug("zclient invalid");
+		return BGP_GR_FAILURE;
+	}
+
+	/* Check if the client is connected */
+	if ((zclient->sock < 0) || (zclient->t_connect)) {
+		if (BGP_DEBUG(zebra, ZEBRA))
+			zlog_debug("client not connected");
+		return BGP_GR_FAILURE;
+	}
+
+	memset(&api, 0, sizeof(struct zapi_cap));
+	api.cap = ZEBRA_CLIENT_RIB_STALE_TIME;
+	api.stale_removal_time = bgp->rib_stale_time;
+	api.vrf_id = bgp->vrf_id;
+	if (zclient_capabilities_send(ZEBRA_CLIENT_CAPABILITIES, zclient, &api)
+	    < 0) {
+		if (BGP_DEBUG(zebra, ZEBRA))
+			zlog_debug("error sending capability");
+		return BGP_GR_FAILURE;
+	}
+	if (BGP_DEBUG(zebra, ZEBRA))
+		zlog_debug("send capabilty success");
+	return BGP_GR_SUCCESS;
 }

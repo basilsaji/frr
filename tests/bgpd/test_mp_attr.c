@@ -1027,7 +1027,7 @@ static void parse_test(struct peer *peer, struct test_segment *t, int type)
 		parse_ret = bgp_mp_unreach_parse(&attr_args, &nlri);
 		break;
 	case BGP_ATTR_PREFIX_SID:
-		parse_ret = bgp_attr_prefix_sid(t->len, &attr_args, &nlri);
+		parse_ret = bgp_attr_prefix_sid(&attr_args, &nlri);
 		break;
 	default:
 		printf("unknown type");
@@ -1087,7 +1087,7 @@ int main(void)
 	if (fileno(stdout) >= 0)
 		tty = isatty(fileno(stdout));
 
-	if (bgp_get(&bgp, &asn, NULL, BGP_INSTANCE_TYPE_DEFAULT))
+	if (bgp_get(&bgp, &asn, NULL, BGP_INSTANCE_TYPE_DEFAULT) < 0)
 		return -1;
 
 	peer = peer_create_accept(bgp);

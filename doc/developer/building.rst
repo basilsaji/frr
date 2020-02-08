@@ -7,9 +7,11 @@ Building FRR
 .. toctree::
    :maxdepth: 2
 
+   static-linking
    building-frr-for-alpine
    building-frr-for-centos6
    building-frr-for-centos7
+   building-frr-for-centos8
    building-frr-for-debian8
    building-frr-for-debian9
    building-frr-for-fedora

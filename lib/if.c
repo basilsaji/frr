@@ -58,7 +58,7 @@ DEFINE_QOBJ_TYPE(interface)
 DEFINE_HOOK(if_add, (struct interface * ifp), (ifp))
 DEFINE_KOOH(if_del, (struct interface * ifp), (ifp))
 
-struct interface_master{
+static struct interface_master{
 	int (*create_hook)(struct interface *ifp);
 	int (*up_hook)(struct interface *ifp);
 	int (*down_hook)(struct interface *ifp);
@@ -137,7 +137,19 @@ static int if_cmp_func(const struct interface *ifp1,
 static int if_cmp_index_func(const struct interface *ifp1,
 			     const struct interface *ifp2)
 {
-	return ifp1->ifindex - ifp2->ifindex;
+	if (ifp1->ifindex == ifp2->ifindex)
+		return 0;
+	else if (ifp1->ifindex > ifp2->ifindex)
+		return 1;
+	else
+		return -1;
+}
+
+static void ifp_connected_free(void *arg)
+{
+	struct connected *c = arg;
+
+	connected_free(&c);
 }
 
 /* Create new interface structure. */
@@ -153,7 +165,7 @@ static struct interface *if_new(vrf_id_t vrf_id)
 	ifp->vrf_id = vrf_id;
 
 	ifp->connected = list_new();
-	ifp->connected->del = (void (*)(void *))connected_free;
+	ifp->connected->del = ifp_connected_free;
 
 	ifp->nbr_connected = list_new();
 	ifp->nbr_connected->del = (void (*)(void *))nbr_connected_free;
@@ -178,7 +190,7 @@ void if_destroy_via_zapi(struct interface *ifp)
 
 	if_set_index(ifp, IFINDEX_INTERNAL);
 	if (!ifp->configured)
-		if_delete(ifp);
+		if_delete(&ifp);
 }
 
 void if_up_via_zapi(struct interface *ifp)
@@ -255,7 +267,9 @@ void if_update_to_new_vrf(struct interface *ifp, vrf_id_t vrf_id)
 			"/frr-interface:lib/interface[name='%s'][vrf='%s']/vrf",
 			ifp->name, old_vrf->name);
 		if (if_dnode) {
+			nb_running_unset_entry(if_dnode->parent);
 			yang_dnode_change_leaf(if_dnode, vrf->name);
+			nb_running_set_entry(if_dnode->parent, ifp);
 			running_config->version++;
 		}
 	}
@@ -276,27 +290,29 @@ void if_delete_retain(struct interface *ifp)
 }
 
 /* Delete and free interface structure. */
-void if_delete(struct interface *ifp)
+void if_delete(struct interface **ifp)
 {
+	struct interface *ptr = *ifp;
 	struct vrf *vrf;
 
-	vrf = vrf_lookup_by_id(ifp->vrf_id);
+	vrf = vrf_lookup_by_id(ptr->vrf_id);
 	assert(vrf);
 
-	IFNAME_RB_REMOVE(vrf, ifp);
-	if (ifp->ifindex != IFINDEX_INTERNAL)
-		IFINDEX_RB_REMOVE(vrf, ifp);
+	IFNAME_RB_REMOVE(vrf, ptr);
+	if (ptr->ifindex != IFINDEX_INTERNAL)
+		IFINDEX_RB_REMOVE(vrf, ptr);
 
-	if_delete_retain(ifp);
+	if_delete_retain(ptr);
 
-	list_delete(&ifp->connected);
-	list_delete(&ifp->nbr_connected);
+	list_delete(&ptr->connected);
+	list_delete(&ptr->nbr_connected);
 
-	if_link_params_free(ifp);
+	if_link_params_free(ptr);
 
-	XFREE(MTYPE_TMP, ifp->desc);
+	XFREE(MTYPE_TMP, ptr->desc);
 
-	XFREE(MTYPE_IF, ifp);
+	XFREE(MTYPE_IF, ptr);
+	*ifp = NULL;
 }
 
 /* Used only internally to check within VRF only */
@@ -866,24 +882,27 @@ struct nbr_connected *nbr_connected_new(void)
 }
 
 /* Free connected structure. */
-void connected_free(struct connected *connected)
+void connected_free(struct connected **connected)
 {
-	if (connected->address)
-		prefix_free(connected->address);
+	struct connected *ptr = *connected;
 
-	if (connected->destination)
-		prefix_free(connected->destination);
+	if (ptr->address)
+		prefix_free(&ptr->address);
 
-	XFREE(MTYPE_CONNECTED_LABEL, connected->label);
+	if (ptr->destination)
+		prefix_free(&ptr->destination);
 
-	XFREE(MTYPE_CONNECTED, connected);
+	XFREE(MTYPE_CONNECTED_LABEL, ptr->label);
+
+	XFREE(MTYPE_CONNECTED, ptr);
+	*connected = NULL;
 }
 
 /* Free nbr connected structure. */
 void nbr_connected_free(struct nbr_connected *connected)
 {
 	if (connected->address)
-		prefix_free(connected->address);
+		prefix_free(&connected->address);
 
 	XFREE(MTYPE_NBR_CONNECTED, connected);
 }
@@ -957,6 +976,20 @@ static int connected_same_prefix(struct prefix *p1, struct prefix *p2)
 			return 1;
 	}
 	return 0;
+}
+
+/* count the number of connected addresses that are in the given family */
+unsigned int connected_count_by_family(struct interface *ifp, int family)
+{
+	struct listnode *cnode;
+	struct connected *connected;
+	unsigned int cnt = 0;
+
+	for (ALL_LIST_ELEMENTS_RO(ifp->connected, cnode, connected))
+		if (connected->address->family == family)
+			cnt++;
+
+	return cnt;
 }
 
 struct connected *connected_lookup_prefix_exact(struct interface *ifp,
@@ -1145,7 +1178,7 @@ void if_terminate(struct vrf *vrf)
 			ifp->node->info = NULL;
 			route_unlock_node(ifp->node);
 		}
-		if_delete(ifp);
+		if_delete(&ifp);
 	}
 }
 
@@ -1248,7 +1281,6 @@ void if_link_params_free(struct interface *ifp)
 	if (ifp->link_params == NULL)
 		return;
 	XFREE(MTYPE_IF_LINK_PARAMS, ifp->link_params);
-	ifp->link_params = NULL;
 }
 
 /* ----------- CLI commands ----------- */
@@ -1527,7 +1559,7 @@ static int lib_interface_destroy(enum nb_event event,
 		ifp = nb_running_unset_entry(dnode);
 
 		ifp->configured = false;
-		if_delete(ifp);
+		if_delete(&ifp);
 		break;
 	}
 
@@ -1585,7 +1617,7 @@ static const void *lib_interface_lookup_entry(const void *parent_list_entry,
 	const char *vrfname = keys->key[1];
 	struct vrf *vrf = vrf_lookup_by_name(vrfname);
 
-	return if_lookup_by_name(ifname, vrf->vrf_id);
+	return vrf ? if_lookup_by_name(ifname, vrf->vrf_id) : NULL;
 }
 
 /*
@@ -1624,7 +1656,32 @@ static int lib_interface_description_destroy(enum nb_event event,
 }
 
 /* clang-format off */
+
+#if defined(__GNUC__) && ((__GNUC__ - 0) < 5) && !defined(__clang__)
+/* gcc versions before 5.x miscalculate the size for structs with variable
+ * length arrays (they just count it as size 0)
+ */
+struct frr_yang_module_info_size3 {
+	/* YANG module name. */
+	const char *name;
+
+	/* Northbound callbacks. */
+	const struct {
+		/* Data path of this YANG node. */
+		const char *xpath;
+
+		/* Callbacks implemented for this node. */
+		struct nb_callbacks cbs;
+
+		/* Priority - lower priorities are processed first. */
+		uint32_t priority;
+	} nodes[3];
+};
+
+const struct frr_yang_module_info_size3 frr_interface_info_size3 asm("frr_interface_info") = {
+#else
 const struct frr_yang_module_info frr_interface_info = {
+#endif
 	.name = "frr-interface",
 	.nodes = {
 		{

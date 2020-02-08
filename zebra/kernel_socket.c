@@ -556,7 +556,7 @@ int ifm_read(struct if_msghdr *ifm)
 	 * is 12 bytes larger than the 32 bit version.
 	 */
 	if (((struct sockaddr *)cp)->sa_family == AF_UNSPEC)
-		cp = cp + 12;
+		cp += 12;
 #endif
 
 	/* Look up for RTA_IFP and skip others. */
@@ -1139,16 +1139,17 @@ void rtm_read(struct rt_msghdr *rtm)
 	 */
 	if (rtm->rtm_type == RTM_CHANGE)
 		rib_delete(afi, SAFI_UNICAST, VRF_DEFAULT, ZEBRA_ROUTE_KERNEL,
-			   0, zebra_flags, &p, NULL, NULL, RT_TABLE_MAIN,
-			   0, 0, true);
+			   0, zebra_flags, &p, NULL, NULL, 0, RT_TABLE_MAIN, 0,
+			   0, true);
 	if (rtm->rtm_type == RTM_GET || rtm->rtm_type == RTM_ADD
 	    || rtm->rtm_type == RTM_CHANGE)
 		rib_add(afi, SAFI_UNICAST, VRF_DEFAULT, ZEBRA_ROUTE_KERNEL, 0,
-			zebra_flags, &p, NULL, &nh, RT_TABLE_MAIN, 0, 0, 0, 0);
+			zebra_flags, &p, NULL, &nh, 0, RT_TABLE_MAIN,
+			0, 0, 0, 0);
 	else
 		rib_delete(afi, SAFI_UNICAST, VRF_DEFAULT, ZEBRA_ROUTE_KERNEL,
-			   0, zebra_flags, &p, NULL, &nh, RT_TABLE_MAIN,
-			   0, 0, true);
+			   0, zebra_flags, &p, NULL, &nh, 0, RT_TABLE_MAIN, 0,
+			   0, true);
 }
 
 /* Interface function for the kernel routing table updates.  Support

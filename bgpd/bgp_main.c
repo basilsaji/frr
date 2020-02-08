@@ -27,7 +27,6 @@
 #include "thread.h"
 #include <lib/version.h>
 #include "memory.h"
-#include "memory_vty.h"
 #include "prefix.h"
 #include "log.h"
 #include "privs.h"
@@ -273,7 +272,6 @@ static int bgp_vrf_enable(struct vrf *vrf)
 	if (bgp && bgp->vrf_id != vrf->vrf_id) {
 		if (bgp->name && strmatch(vrf->name, VRF_DEFAULT_NAME)) {
 			XFREE(MTYPE_BGP, bgp->name);
-			bgp->name = NULL;
 			XFREE(MTYPE_BGP, bgp->name_pretty);
 			bgp->name_pretty = XSTRDUP(MTYPE_BGP, "VRF default");
 			bgp->inst_type = BGP_INSTANCE_TYPE_DEFAULT;
@@ -360,7 +358,9 @@ static void bgp_vrf_terminate(void)
 	vrf_terminate();
 }
 
-static const struct frr_yang_module_info *bgpd_yang_modules[] = {
+static const struct frr_yang_module_info *const bgpd_yang_modules[] = {
+	&frr_interface_info,
+	&frr_route_map_info,
 };
 
 FRR_DAEMON_INFO(bgpd, BGP, .vty_port = BGP_VTY_PORT,
@@ -488,6 +488,7 @@ int main(int argc, char **argv)
 
 	frr_config_fork();
 	/* must be called after fork() */
+	bgp_gr_apply_running_config();
 	bgp_pthreads_run();
 	frr_run(bm->master);
 

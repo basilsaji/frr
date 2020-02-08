@@ -83,6 +83,11 @@ static void recv_join(struct interface *ifp, struct pim_neighbor *neigh,
 	    && (source_flags & PIM_WILDCARD_BIT_MASK)) {
 		struct pim_rpf *rp = RP(pim_ifp->pim, sg->grp);
 
+		if (!rp) {
+			zlog_warn("%s: Lookup of RP failed for %pSG4",
+				  __PRETTY_FUNCTION__, sg);
+			return;
+		}
 		/*
 		 * If the RP sent in the message is not
 		 * our RP for the group, drop the message
@@ -136,6 +141,12 @@ static void recv_prune(struct interface *ifp, struct pim_neighbor *neigh,
 	    && (source_flags & PIM_WILDCARD_BIT_MASK)) {
 		struct pim_rpf *rp = RP(pim_ifp->pim, sg->grp);
 
+		if (!rp) {
+			if (PIM_DEBUG_PIM_TRACE)
+				zlog_debug("%s: RP for %pSG4 completely failed lookup",
+					   __PRETTY_FUNCTION__, sg);
+			return;
+		}
 		// Ignoring Prune *,G's at the moment.
 		if (sg->src.s_addr != rp->rpf_addr.u.prefix4.s_addr)
 			return;
@@ -316,7 +327,6 @@ int pim_joinprune_recv(struct interface *ifp, struct pim_neighbor *neigh,
 			recv_prune(ifp, neigh, msg_holdtime,
 				   msg_upstream_addr.u.prefix4, &sg,
 				   msg_source_flags);
-
 			/*
 			 * So if we are receiving a S,G,RPT prune
 			 * before we have any data for that S,G
@@ -332,15 +342,15 @@ int pim_joinprune_recv(struct interface *ifp, struct pim_neighbor *neigh,
 				struct pim_upstream *up = sg_ch->upstream;
 				PIM_IF_FLAG_SET_S_G_RPT(sg_ch->flags);
 				if (up) {
-					if (PIM_DEBUG_TRACE)
+					if (PIM_DEBUG_PIM_TRACE)
 						zlog_debug(
 							"%s: SGRpt flag is set, del inherit oif from up %s",
 							__PRETTY_FUNCTION__,
 							up->sg_str);
-					pim_channel_del_oif(
+					pim_channel_del_inherited_oif(
 						up->channel_oil,
 						starg_ch->interface,
-						PIM_OIF_FLAG_PROTO_STAR);
+						__func__);
 				}
 			}
 		}

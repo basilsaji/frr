@@ -7,7 +7,7 @@
 ##
 AC_PREREQ([2.60])
 
-AC_INIT([frr], [7.3-dev], [https://github.com/frrouting/frr/issues])
+AC_INIT([frr], [7.4-dev], [https://github.com/frrouting/frr/issues])
 PACKAGE_URL="https://frrouting.org/"
 AC_SUBST([PACKAGE_URL])
 PACKAGE_FULLNAME="FRRouting"
@@ -30,7 +30,7 @@ build_clippy="true"
 
 dnl case 1: external clippy
 if test -n "$with_clippy" -a "$with_clippy" != "no" -a "$with_clippy" != "yes"; then
-  if test "$enable_clippy_only" == "yes"; then
+  if test "$enable_clippy_only" = "yes"; then
     AC_MSG_ERROR([--enable-clippy-only does not make sense with --with-clippy])
   fi
 
@@ -249,7 +249,18 @@ if test "x${enable_gcov}" = "xyes"; then
    fi
 
    LDFLAGS="${LDFLAGS} -lgcov"
-elif test "x${enable_dev_build}" = "xyes"; then
+fi
+
+if test "x${enable_clang_coverage}" = "xyes"; then
+   AC_C_FLAG([-fprofile-instr-generate], [
+     AC_MSG_ERROR([$CC does not support -fprofile-instr-generate.])
+   ])
+   AC_C_FLAG([-fcoverage-mapping], [
+     AC_MSG_ERROR([$CC does not support -fcoverage-mapping.])
+   ])
+fi
+
+if test "x${enable_dev_build}" = "xyes"; then
    AC_DEFINE([DEV_BUILD], [1], [Build for development])
    if test "z$orig_cflags" = "z"; then
       AC_C_FLAG([-g3])
@@ -331,7 +342,14 @@ if test "$enable_memory_sanitizer" = "yes"; then
   AC_C_FLAG([-fsanitize=memory -fPIE -pie], [
     AC_MSG_ERROR([$CC does not support Memory Sanitizer.])
   ], [
-    SAN_FLAGS="-fsanitize=memory -fPIE -pie"
+    SAN_FLAGS="$SAN_FLAGS -fsanitize=memory -fPIE -pie"
+  ])
+fi
+if test "$enable_undefined_sanitizer" = "yes"; then
+  AC_C_FLAG([-fsanitize=undefined], [
+    AC_MSG_ERROR([$CC does not support UndefinedBehaviorSanitizer.])
+  ], [
+    SAN_FLAGS="$SAN_FLAGS -fsanitize=undefined"
   ])
 fi
 AC_SUBST([SAN_FLAGS])
@@ -567,7 +585,9 @@ AC_ARG_ENABLE([clippy-only],
 AC_ARG_ENABLE([numeric_version],
   AS_HELP_STRING([--enable-numeric-version], [Only numeric digits allowed in version (for Alpine)]))
 AC_ARG_ENABLE([gcov],
-  AS_HELP_STRING([--enable-gcov], [Add code coverage information]))
+  AS_HELP_STRING([--enable-gcov], [Collect coverage information with gcov]))
+AC_ARG_ENABLE([clang_coverage],
+  AS_HELP_STRING([--enable-clang-coverage], [Collect coverage information with Clang Coverage]))
 AC_ARG_ENABLE([bfdd],
   AS_HELP_STRING([--disable-bfdd], [do not build bfdd]))
 AC_ARG_ENABLE([address-sanitizer],
@@ -576,6 +596,8 @@ AC_ARG_ENABLE([thread-sanitizer],
   AS_HELP_STRING([--enable-thread-sanitizer], [enable ThreadSanitizer support for detecting data races]))
 AC_ARG_ENABLE([memory-sanitizer],
   AS_HELP_STRING([--enable-memory-sanitizer], [enable MemorySanitizer support for detecting uninitialized memory reads]))
+AC_ARG_ENABLE([undefined-sanitizer],
+  AS_HELP_STRING([--undefined-sanitizer], [enable UndefinedBehaviorSanitizer support for detecting undefined behavior]))
 AC_ARG_WITH([crypto],
   AS_HELP_STRING([--with-crypto=<internal|openssl>], [choose between different implementations of cryptographic functions(default value is --with-crypto=internal)]))
 
@@ -643,6 +665,7 @@ fi
 
 if test "${enable_datacenter}" = "yes" ; then
   AC_DEFINE([HAVE_DATACENTER], [1], [Compile extensions for a DataCenter])
+  AC_MSG_WARN([The --enable-datacenter compile time option is deprecated.  Please modify the init script to pass -F datacenter to the daemons instead.])
   DFLT_NAME="datacenter"
 else
   DFLT_NAME="traditional"
@@ -1060,6 +1083,8 @@ FRR_INCLUDES
 
 dnl V6 headers are checked below, after we check for v6
 
+is_linux=false
+
 AC_MSG_CHECKING([which operating system interface to use])
 case "$host_os" in
   sunos* | solaris2*)
@@ -1088,6 +1113,8 @@ case "$host_os" in
     dnl how to fix it but no real progress on implementation
     dnl when they fix it, remove this
     AC_DEFINE([IPV6_MINHOPCOUNT], [73], [Linux ipv6 Min Hop Count])
+
+    is_linux=true
     ;;
   openbsd*)
     AC_MSG_RESULT([OpenBSD])
@@ -1115,6 +1142,7 @@ case "$host_os" in
     ;;
 esac
 AM_CONDITIONAL([SOLARIS], [test "${SOLARIS}" = "solaris"])
+AM_CONDITIONAL([LINUX], [${is_linux}])
 
 AC_SYS_LARGEFILE
 
@@ -1153,6 +1181,7 @@ dnl ##########################################################################
 #
 # Logic for protobuf support.
 #
+PROTO3=false
 if test "$enable_protobuf" = "yes"; then
   # Check for protoc & protoc-c
 
@@ -1167,9 +1196,15 @@ if test "$enable_protobuf" = "yes"; then
   PKG_CHECK_MODULES([PROTOBUF_C], [libprotobuf-c >= 0.14],, [
     AC_MSG_FAILURE([protobuf requested but libprotobuf-c not found.  Install protobuf-c.])
   ])
-  AC_CHECK_HEADER([google/protobuf-c/protobuf-c.h], [], [
-    AC_MSG_FAILURE([protobuf requested but protobuf-c.h not found.  Install protobuf-c.])
-  ])
+
+  PROTO3=true
+  AC_CHECK_HEADER([google/protobuf-c/protobuf-c.h],
+                  [AC_CHECK_DECLS(PROTOBUF_C_LABEL_NONE,
+                                  AC_DEFINE([HAVE_PROTOBUF_VERSION_3],
+                                            [1], [Have Protobuf version 3]),
+                                  [PROTO3=false],
+                                  [#include <google/protobuf-c/protobuf-c.h>])],
+                  [PROTO3=false && AC_MSG_FAILURE([protobuf requested but protobuf-c.h not found.  Install protobuf-c.])])
 
   AC_DEFINE([HAVE_PROTOBUF], [1], [protobuf])
 fi
@@ -2078,6 +2113,19 @@ if test x"${enable_backtrace}" != x"no" ; then
     AC_DEFINE([HAVE_LIBUNWIND], [1], [libunwind])
     backtrace_ok=yes
   ], [
+    true
+  ])
+
+  if test "$backtrace_ok" = "no"; then
+    AC_CHECK_HEADER([unwind.h], [
+      AC_SEARCH_LIBS([unw_getcontext], [unwind], [
+        AC_DEFINE([HAVE_LIBUNWIND], [1], [libunwind])
+        backtrace_ok=yes
+      ])
+    ])
+  fi
+
+  if test "$backtrace_ok" = "no"; then
     case "$host_os" in
     sunos* | solaris2*)
       AC_CHECK_FUNCS([printstack], [
@@ -2094,7 +2142,7 @@ if test x"${enable_backtrace}" != x"no" ; then
         ],, [-lm])
       ])
     fi
-  ])
+  fi
 
   if test x"${enable_backtrace}" = x"yes" -a x"${backtrace_ok}" = x"no"; then
     dnl user explicitly requested backtrace but we failed to find support
@@ -2265,6 +2313,7 @@ AM_CONDITIONAL([SNMP], [test "x$SNMP_METHOD" = "xagentx"])
 AM_CONDITIONAL([IRDP], [$IRDP])
 AM_CONDITIONAL([FPM], [test "x$enable_fpm" = "xyes"])
 AM_CONDITIONAL([HAVE_PROTOBUF], [test "x$enable_protobuf" = "xyes"])
+AM_CONDITIONAL([HAVE_PROTOBUF3], [$PROTO3])
 dnl daemons
 AM_CONDITIONAL([VTYSH], [test "x$VTYSH" = "xvtysh"])
 AM_CONDITIONAL([ZEBRA], [test "${enable_zebra}" != "no"])

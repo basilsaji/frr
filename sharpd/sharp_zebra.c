@@ -73,7 +73,7 @@ static int interface_address_delete(ZAPI_CALLBACK_ARGS)
 	if (!c)
 		return 0;
 
-	connected_free(c);
+	connected_free(&c);
 	return 0;
 }
 
@@ -243,6 +243,8 @@ void route_add(struct prefix *p, vrf_id_t vrf_id,
 		api_nh = &api.nexthops[i];
 		api_nh->vrf_id = nh->vrf_id;
 		api_nh->type = nh->type;
+		api_nh->weight = nh->weight;
+
 		switch (nh->type) {
 		case NEXTHOP_TYPE_IPV4:
 			api_nh->gate = nh->gate;
@@ -265,6 +267,17 @@ void route_add(struct prefix *p, vrf_id_t vrf_id,
 			api_nh->bh_type = nh->bh_type;
 			break;
 		}
+
+		if (nh->nh_label && nh->nh_label->num_labels > 0) {
+			int j;
+
+			SET_FLAG(api_nh->flags, ZAPI_NEXTHOP_FLAG_LABEL);
+
+			api_nh->label_num = nh->nh_label->num_labels;
+			for (j = 0; j < nh->nh_label->num_labels; j++)
+				api_nh->labels[j] = nh->nh_label->label[j];
+		}
+
 		i++;
 	}
 	api.nexthop_num = i;

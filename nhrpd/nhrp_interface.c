@@ -135,7 +135,7 @@ static void nhrp_interface_update_nbma(struct interface *ifp)
 				     &nifp->linkidx, &saddr);
 		debugf(NHRP_DEBUG_IF, "%s: GRE: %x %x %x", ifp->name,
 		       nifp->grekey, nifp->linkidx, saddr.s_addr);
-		if (saddr.s_addr)
+		if (saddr.s_addr != INADDR_ANY)
 			sockunion_set(&nbma, AF_INET, (uint8_t *)&saddr.s_addr,
 				      sizeof(saddr.s_addr));
 		else if (!nbmaifp && nifp->linkidx != IFINDEX_INTERNAL)
@@ -364,7 +364,7 @@ int nhrp_interface_address_delete(ZAPI_CALLBACK_ARGS)
 
 	nhrp_interface_update_address(
 		ifc->ifp, family2afi(PREFIX_FAMILY(ifc->address)), 0);
-	connected_free(ifc);
+	connected_free(&ifc);
 
 	return 0;
 }

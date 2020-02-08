@@ -102,8 +102,10 @@ static void assegment_data_free(as_t *asdata)
 	XFREE(MTYPE_AS_SEG_DATA, asdata);
 }
 
-const char *aspath_segment_type_str[] = {"as-invalid", "as-set", "as-sequence",
-					 "as-confed-sequence", "as-confed-set"};
+const char *const aspath_segment_type_str[] = {
+	"as-invalid", "as-set", "as-sequence", "as-confed-sequence",
+	"as-confed-set"
+};
 
 /* Get a new segment. Note that 0 is an allowed length,
  * and will result in a segment with no allocated data segment.
@@ -412,6 +414,19 @@ unsigned int aspath_count_hops(const struct aspath *aspath)
 		seg = seg->next;
 	}
 	return count;
+}
+
+/* Check if aspath has AS_SET or AS_CONFED_SET */
+bool aspath_check_as_sets(struct aspath *aspath)
+{
+	struct assegment *seg = aspath->segments;
+
+	while (seg) {
+		if (seg->type == AS_SET || seg->type == AS_CONFED_SET)
+			return true;
+		seg = seg->next;
+	}
+	return false;
 }
 
 /* Estimate size aspath /might/ take if encoded into an

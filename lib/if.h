@@ -513,7 +513,7 @@ extern void if_delete_retain(struct interface *);
 
 /* Delete and free the interface structure: calls if_delete_retain and then
    deletes it from the interface list and frees the structure. */
-extern void if_delete(struct interface *);
+extern void if_delete(struct interface **ifp);
 
 extern int if_is_up(const struct interface *ifp);
 extern int if_is_running(const struct interface *ifp);
@@ -543,7 +543,7 @@ extern ifindex_t ifname2ifindex(const char *ifname, vrf_id_t vrf_id);
 
 /* Connected address functions. */
 extern struct connected *connected_new(void);
-extern void connected_free(struct connected *);
+extern void connected_free(struct connected **connected);
 extern void connected_add(struct interface *, struct connected *);
 extern struct connected *
 connected_add_by_prefix(struct interface *, struct prefix *, struct prefix *);
@@ -553,6 +553,7 @@ extern struct connected *connected_lookup_prefix(struct interface *,
 						 struct prefix *);
 extern struct connected *connected_lookup_prefix_exact(struct interface *,
 						       struct prefix *);
+extern unsigned int connected_count_by_family(struct interface *, int family);
 extern struct nbr_connected *nbr_connected_new(void);
 extern void nbr_connected_free(struct nbr_connected *);
 struct nbr_connected *nbr_connected_check(struct interface *, struct prefix *);
