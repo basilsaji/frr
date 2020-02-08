@@ -238,10 +238,10 @@ static const char *get_afi_safi_vty_str(afi_t afi, safi_t safi)
 		return "IPv6 Flowspec";
 	else if (afi == AFI_L2VPN && safi == SAFI_EVPN)
 		return "L2VPN EVPN";
-    else if (afi == AFI_BGP_LS && safi == SAFI_BGP_LS)
-        return "LS";
-    else if (afi == AFI_BGP_LS && safi == SAFI_BGP_LS_SPF)
-        return "LS SPF";
+	else if (afi == AFI_BGP_LS && safi == SAFI_BGP_LS)
+		return "LS";
+	else if (afi == AFI_BGP_LS && safi == SAFI_BGP_LS_SPF)
+		return "LS SPF";
 	else
 		return "Unknown";
 }
@@ -280,10 +280,10 @@ static const char *get_afi_safi_json_str(afi_t afi, safi_t safi)
 		return "ipv6Flowspec";
 	else if (afi == AFI_L2VPN && safi == SAFI_EVPN)
 		return "l2VpnEvpn";
-    else if (afi == AFI_BGP_LS && safi == SAFI_BGP_LS)
-        return "ls";
-    else if (afi == AFI_BGP_LS && safi == SAFI_BGP_LS_SPF)
-        return "lsSpf";
+	else if (afi == AFI_BGP_LS && safi == SAFI_BGP_LS)
+		return "ls";
+	else if (afi == AFI_BGP_LS && safi == SAFI_BGP_LS_SPF)
+		return "lsSpf";
 	else
 		return "Unknown";
 }
@@ -1841,6 +1841,31 @@ DEFPY (bgp_rpkt_quanta,
        "Number of packets\n")
 {
 	return bgp_rpkt_quanta_config_vty(vty, quanta, !no);
+}
+
+
+static void bgp_write_hex_update_vty(struct vty *vty, struct bgp *bgp)
+{
+	struct listnode *node, *next;
+	struct peer *peer;
+
+	/* Send update to peer */
+	for (ALL_LIST_ELEMENTS(bgp->peer, node, next, peer)) {
+		thread_add_timer_msec(bm->master,
+				      bgp_generate_hex_updgrp_packets,
+				      peer, 0,
+			              &peer->t_generate_updgrp_packets);
+	}
+}
+
+DEFPY (bgp_write_hex_update,
+       bgp_write_hex_update_cmd,
+       "bgp write-hex-dump",
+       "BGP specific commands\n"
+       "Send hex dump stored locally\n")
+{
+	VTY_DECLVAR_CONTEXT(bgp, bgp);
+	bgp_write_hex_update_vty(vty, bgp);
 }
 
 void bgp_config_write_coalesce_time(struct vty *vty, struct bgp *bgp)
@@ -15487,6 +15512,9 @@ void bgp_vty_init(void)
 
 	install_element(BGP_NODE, &bgp_wpkt_quanta_cmd);
 	install_element(BGP_NODE, &bgp_rpkt_quanta_cmd);
+
+	/* Sending hex packet */
+	install_element(BGP_NODE, &bgp_write_hex_update_cmd);
 
 	install_element(BGP_NODE, &bgp_coalesce_time_cmd);
 	install_element(BGP_NODE, &no_bgp_coalesce_time_cmd);

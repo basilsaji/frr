@@ -160,7 +160,7 @@ typedef struct {
 	uint16_t protocol_id;
 
 	/* BGP LS identifier */
-	uint64_t identifier;
+	uint16_t identifier;
 
 	/* BGP LS local node desc bgp router id */
 	uint32_t local_bgp_router_id;
