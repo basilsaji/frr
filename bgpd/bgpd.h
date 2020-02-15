@@ -318,6 +318,13 @@ struct bgp {
 
 	struct hash *update_groups[BGP_AF_MAX];
 
+   /* BGP LS database */
+   struct hash *lsattrhash;
+   struct hash *lsnodenlrihash;
+   struct hash *lslinknlrihash;
+   struct hash *lsprefix4nlrihash;
+   struct hash *lsprefix6nlrihash;
+
 	/*
 	 * Global statistics for update groups.
 	 */

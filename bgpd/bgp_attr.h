@@ -253,7 +253,7 @@ struct attr {
 	uint32_t rmap_table_id;
 
     /* LS NLRI */
-    ls_nlri_type ls_nlri;
+    ls_nlriattr_type ls_nlri;
 
     /* LS ATTR */
     ls_attr_type ls_attr;

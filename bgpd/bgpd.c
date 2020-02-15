@@ -816,6 +816,173 @@ int peer_cmp(struct peer *p1, struct peer *p2)
 	return sockunion_cmp(&p1->su, &p2->su);
 }
 
+static unsigned int lsattrhash_key_make(const void *p)
+{
+   uint32_t key = 0;
+   const ls_attr_type *ls_attr = p;
+
+   key = jhash(&ls_attr->flag, 8, key);
+
+   if (ls_attr->flag & LS_NODE_ATTR_SPF_CAP_PRESENT)
+      key = jhash(&ls_attr->spf_algo, 1, key);
+
+   if (ls_attr->flag & LS_NODE_ATTR_SPF_STATUS_PRESENT)
+      key = jhash(&ls_attr->node_spf_status, 1, key);
+
+   if (ls_attr->flag & LS_LINK_ATTR_PREFIX_LEN_PRESENT)
+      key = jhash(&ls_attr->link_prefix_len, 1, key);
+
+   if (ls_attr->flag & LS_LINK_ATTR_SPF_STATUS_PRESENT)
+      key = jhash(&ls_attr->link_spf_status, 1, key);
+
+   if (ls_attr->flag & LS_LINK_IGP_METRIC_PRESENT)
+      key = jhash(&ls_attr->link_igp_metric, 4, key);
+
+   if (ls_attr->flag & LS_PREFIX_ATTR_METRIC_PRESENT)
+      key = jhash(&ls_attr->prefix_metric, 4, key);
+
+   if (ls_attr->flag & LS_PREFIX_ATTR_SPF_STATUS_PRESENT)
+      key = jhash(&ls_attr->prefix_spf_status, 1, key);
+
+   if (ls_attr->flag & LS_PREFIX_ATTR_SEQ_PRESENT) {
+      key = jhash(&ls_attr->prefix_seq_low, 4, key);
+      key = jhash(&ls_attr->prefix_seq_high, 4, key);
+   }
+
+   return key;
+}
+
+static bool lsattrhash_cmp(const void *p1, const void *p2)
+{
+   const ls_attr_type *la1 = p1;
+   const ls_attr_type *la2 = p2;
+
+   if (!la1 || !la2)
+      return false;
+
+   if (la1->spf_algo != la2->spf_algo)
+      return false;
+
+   if (la1->node_spf_status != la2->node_spf_status)
+      return false;
+
+   if (la1->link_prefix_len != la2->link_prefix_len)
+      return false;
+
+   if (la1->link_spf_status != la2->link_spf_status)
+      return false;
+
+   if (la1->link_igp_metric != la2->link_igp_metric)
+      return false;
+
+   if (la1->prefix_metric != la2->prefix_metric)
+      return false;
+
+   if (la1->prefix_spf_status != la2->prefix_spf_status)
+      return false;
+
+   if (la1->prefix_seq_low != la2->prefix_seq_low)
+      return false;
+
+   if (la1->prefix_seq_high != la2->prefix_seq_high)
+      return false;
+
+   return true;
+}
+
+static unsigned int lsnodenlrihash_key_make(const void *p)
+{
+   uint32_t key = 0;
+   const ls_nlri_node *node = p;
+
+   key = jhash(&node->ls_hdr, sizeof(ls_header_type), key);
+   key = jhash(&node->local, sizeof(ls_nodedesc_type), key);
+   return key;
+}
+
+static bool lsnodenlrihash_cmp(const void *p1, const void *p2)
+{
+   const ls_nlri_node *node1 = p1;
+   const ls_nlri_node *node2 = p2;
+
+   if (!node1 || !node2)
+      return false;
+
+   if (memcmp(&node1->ls_hdr, &node2->ls_hdr, sizeof(ls_header_type)) != 0)
+      return false;
+
+   if (memcmp(&node1->local, &node2->local, sizeof(ls_nodedesc_type)) != 0)
+      return false;
+
+   return true;
+}
+
+static unsigned int lslinknlrihash_key_make(const void *p)
+{
+   uint32_t key = 0;
+   const ls_nlri_link *link = p;
+
+   key = jhash(&link->ls_hdr, sizeof(ls_header_type), key);
+   key = jhash(&link->local, sizeof(ls_nodedesc_type), key);
+   key = jhash(&link->remote, sizeof(ls_nodedesc_type), key);
+   key = jhash(&link->link, sizeof(ls_linkdesc_type), key);
+   return key;
+}
+
+static bool lslinknlrihash_cmp(const void *p1, const void *p2)
+{
+   const ls_nlri_link *link1 = p1;
+   const ls_nlri_link *link2 = p2;
+
+   if (!link1 || !link2)
+      return false;
+
+   if (memcmp(&link1->ls_hdr, &link2->ls_hdr, sizeof(ls_header_type)) != 0)
+      return false;
+
+   if (memcmp(&link1->local, &link2->local, sizeof(ls_nodedesc_type)) != 0)
+      return false;
+
+   if (memcmp(&link1->remote, &link2->remote, sizeof(ls_nodedesc_type)) != 0)
+      return false;
+
+   if (memcmp(&link1->link, &link2->link, sizeof(ls_linkdesc_type)) != 0)
+      return false;
+
+   return true;
+}
+
+static unsigned int lsprefixnlrihash_key_make(const void *p)
+{
+   uint32_t key = 0;
+   const ls_nlri_prefix *pfx = p;
+
+   key = jhash(&pfx->ls_hdr, sizeof(ls_header_type), key);
+   key = jhash(&pfx->local, sizeof(ls_nodedesc_type), key);
+   key = jhash(&pfx->prefix, sizeof(ls_prefixdesc_type), key);
+   return key;
+}
+
+static bool lsprefixnlrihash_cmp(const void *p1, const void *p2)
+{
+   const ls_nlri_prefix *pfx1 = p1;
+   const ls_nlri_prefix *pfx2 = p2;
+
+   if (!pfx1 || !pfx2)
+      return false;
+
+   if (memcmp(&pfx1->ls_hdr, &pfx2->ls_hdr, sizeof(ls_header_type)) != 0)
+      return false;
+
+   if (memcmp(&pfx1->local, &pfx2->local, sizeof(ls_nodedesc_type)) != 0)
+      return false;
+
+   if (memcmp(&pfx1->prefix, &pfx2->prefix, sizeof(ls_prefixdesc_type)) != 0)
+      return false;
+
+   return true;
+}
+
 static unsigned int peer_hash_key_make(const void *p)
 {
 	const struct peer *peer = p;
@@ -2947,6 +3114,17 @@ static struct bgp *bgp_create(as_t *as, const char *name,
 	bgp->peerhash = hash_create(peer_hash_key_make, peer_hash_same,
 				    "BGP Peer Hash");
 	bgp->peerhash->max_size = BGP_PEER_MAX_HASH_SIZE;
+
+   bgp->lsattrhash = hash_create(lsattrhash_key_make, lsattrhash_cmp,
+               "BGP LS Attribute hash");
+   bgp->lsnodenlrihash = hash_create(lsnodenlrihash_key_make, lsnodenlrihash_cmp,
+               "BGP LS Node NLRI hash");
+   bgp->lslinknlrihash = hash_create(lslinknlrihash_key_make, lslinknlrihash_cmp,
+               "BGP LS Link NLRI hash");
+   bgp->lsprefix4nlrihash = hash_create(lsprefixnlrihash_key_make, lsprefixnlrihash_cmp,
+               "BGP LS Prefix4 NLRI hash");
+   bgp->lsprefix6nlrihash = hash_create(lsprefixnlrihash_key_make, lsprefixnlrihash_cmp,
+               "BGP LS Prefix4 NLRI hash");
 
 	bgp->group = list_new();
 	bgp->group->cmp = (int (*)(void *, void *))peer_group_cmp;
