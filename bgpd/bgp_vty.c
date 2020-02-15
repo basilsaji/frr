@@ -1764,28 +1764,70 @@ DEFPY (bgp_rpkt_quanta,
 }
 
 
-static void bgp_write_hex_update_vty(struct vty *vty, struct bgp *bgp)
+static int bgp_write_hex_update_vty(struct vty *vty, struct bgp *bgp, const char *fname)
 {
 	struct listnode *node, *next;
 	struct peer *peer;
+	FILE *confp = NULL;
+	int ret;
+	//int buf[VTY_BUFSIZ];
+	//int len = VTY_BUFSIZ;
+	char *buf = NULL;
+	size_t len = 0;
+	int i = 0, j = 0;
+	char c;
+	int val;
+	char hexstr[VTY_BUFSIZ];
+	char ch[2];
+	int value;
 
-	/* Send update to peer */
-	for (ALL_LIST_ELEMENTS(bgp->peer, node, next, peer)) {
-		thread_add_timer_msec(bm->master,
-				      bgp_generate_hex_updgrp_packets,
-				      peer, 0,
-			              &peer->t_generate_updgrp_packets);
+	confp = fopen(fname, "r");
+	if (confp == NULL) {
+		fprintf(stderr,
+			"%% Can't open configuration file %s due to '%s'.\n",
+			fname, safe_strerror(errno));
+		return (CMD_ERR_NO_FILE);
 	}
+
+	while ((getline(&buf, &len, confp)) != -1) {
+		vty_out(vty, "Len %d text: %s\n", len, buf);
+		j = 0;
+		for(i = 0; i < len; i++) {
+			sprintf(ch, "%c%c", buf[i], buf[i+1]);
+			i++;
+			value = strtol(ch, NULL, 16);
+			hexstr[j] = (unsigned char)value;
+			j++;
+		}
+
+		/* Send update to peer */
+		for (ALL_LIST_ELEMENTS(bgp->peer, node, next, peer)) {
+			memcpy(peer->hex_dump, hexstr, j);
+			peer->hex_len = j;
+			thread_add_timer_msec(bm->master,
+					bgp_generate_hex_updgrp_packets,
+					peer, 0,
+					&peer->t_generate_updgrp_packets);
+		}
+	}
+
+	fclose(confp);
+	return (ret);
 }
+
 
 DEFPY (bgp_write_hex_update,
        bgp_write_hex_update_cmd,
-       "bgp write-hex-dump",
+       "bgp FILENAME write-hex-dump",
        "BGP specific commands\n"
+       "Configuration file to read\n"
        "Send hex dump stored locally\n")
 {
+	int ret;
+	const char *fname = argv[1]->arg;
 	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	bgp_write_hex_update_vty(vty, bgp);
+
+	bgp_write_hex_update_vty(vty, bgp, fname);
 }
 
 void bgp_config_write_coalesce_time(struct vty *vty, struct bgp *bgp)

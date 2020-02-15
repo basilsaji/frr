@@ -787,6 +787,9 @@ struct peer {
 	int status;
 	int ostatus;
 
+	unsigned char hex_dump[4096];
+	int hex_len;
+
 	/* FSM events, stored for debug purposes.
 	 * Note: uchar used for reduced memory usage.
 	 */

@@ -402,8 +402,9 @@ int bgp_generate_hex_updgrp_packets(struct thread *thread)
 
 	s = stream_new(BGP_MAX_PACKET_SIZE + BGP_MAX_PACKET_SIZE_OVERFLOW);
 	stream_reset(s);
-	len = sizeof(g_bgp_hex);
-	stream_write (s, g_bgp_hex, len);
+	len = peer->hex_dump[16] << 8;
+	len |= peer->hex_dump[17];
+	stream_write (s, peer->hex_dump, len);
 	bgp_packet_add(peer, s);
 
 	bgp_writes_on(peer);
