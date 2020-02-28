@@ -816,7 +816,7 @@ int peer_cmp(struct peer *p1, struct peer *p2)
 	return sockunion_cmp(&p1->su, &p2->su);
 }
 
-static unsigned int lsattrhash_key_make(const void *p)
+unsigned int lsattrhash_key_make(const void *p)
 {
    uint32_t key = 0;
    const ls_attr_type *ls_attr = p;
@@ -852,7 +852,7 @@ static unsigned int lsattrhash_key_make(const void *p)
    return key;
 }
 
-static bool lsattrhash_cmp(const void *p1, const void *p2)
+bool lsattrhash_cmp(const void *p1, const void *p2)
 {
    const ls_attr_type *la1 = p1;
    const ls_attr_type *la2 = p2;
@@ -890,7 +890,7 @@ static bool lsattrhash_cmp(const void *p1, const void *p2)
    return true;
 }
 
-static unsigned int lsnodenlrihash_key_make(const void *p)
+unsigned int lsnodenlrihash_key_make(const void *p)
 {
    uint32_t key = 0;
    const ls_nlri_node *node = p;
@@ -900,7 +900,7 @@ static unsigned int lsnodenlrihash_key_make(const void *p)
    return key;
 }
 
-static bool lsnodenlrihash_cmp(const void *p1, const void *p2)
+bool lsnodenlrihash_cmp(const void *p1, const void *p2)
 {
    const ls_nlri_node *node1 = p1;
    const ls_nlri_node *node2 = p2;
@@ -917,7 +917,7 @@ static bool lsnodenlrihash_cmp(const void *p1, const void *p2)
    return true;
 }
 
-static unsigned int lslinknlrihash_key_make(const void *p)
+unsigned int lslinknlrihash_key_make(const void *p)
 {
    uint32_t key = 0;
    const ls_nlri_link *link = p;
@@ -929,7 +929,7 @@ static unsigned int lslinknlrihash_key_make(const void *p)
    return key;
 }
 
-static bool lslinknlrihash_cmp(const void *p1, const void *p2)
+bool lslinknlrihash_cmp(const void *p1, const void *p2)
 {
    const ls_nlri_link *link1 = p1;
    const ls_nlri_link *link2 = p2;
@@ -952,7 +952,7 @@ static bool lslinknlrihash_cmp(const void *p1, const void *p2)
    return true;
 }
 
-static unsigned int lsprefixnlrihash_key_make(const void *p)
+unsigned int lsprefixnlrihash_key_make(const void *p)
 {
    uint32_t key = 0;
    const ls_nlri_prefix *pfx = p;
@@ -963,7 +963,7 @@ static unsigned int lsprefixnlrihash_key_make(const void *p)
    return key;
 }
 
-static bool lsprefixnlrihash_cmp(const void *p1, const void *p2)
+bool lsprefixnlrihash_cmp(const void *p1, const void *p2)
 {
    const ls_nlri_prefix *pfx1 = p1;
    const ls_nlri_prefix *pfx2 = p2;

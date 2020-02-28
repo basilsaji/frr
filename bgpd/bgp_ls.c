@@ -41,6 +41,7 @@
 #include "bgpd/bgp_vty.h"
 #include "bgpd/bgp_zebra.h"
 #include "bgpd/bgp_nht.h"
+#include "bgpd/bgp_memory.h"
 #include "bgpd/bgp_ls.h"
 
 int bgp_nlri_parse_ls_node_local_desc(struct peer *peer, struct attr *attr,
@@ -348,7 +349,7 @@ int bgp_nlri_parse_ls_link(struct peer *peer, struct attr *attr,
 	}
 
 	error = bgp_nlri_parse_ls_node_local_desc(peer, attr, tlvdata, tlvdatalen);
-	if ( error != BGP_NLRI_PARSE_ERROR ) {
+	if ( error != BGP_NLRI_PARSE_OK ) {
 		return error;
 	}
 	parsedlen += psize;
@@ -360,7 +361,7 @@ int bgp_nlri_parse_ls_link(struct peer *peer, struct attr *attr,
 	psize = tlvdatalen +  BGP_LS_TLV_HEADER_LEN;
 	tlvdata = pnt + BGP_LS_TLV_HEADER_LEN;
 
-	if ( type != LS_LOCAL_NODE_DESC) {
+	if ( type != LS_REMOTE_NODE_DESC) {
 		flog_err(
 			EC_BGP_UPDATE_RCV,
 			"%s [Error] Update packet error / LS NODE NLRI TLV expected remote node descriptor TLV. Got type %d",
@@ -377,7 +378,7 @@ int bgp_nlri_parse_ls_link(struct peer *peer, struct attr *attr,
 	}
 
 	error = bgp_nlri_parse_ls_node_remote_desc(peer, attr, tlvdata, tlvdatalen);
-	if ( error != BGP_NLRI_PARSE_ERROR ) {
+	if ( error != BGP_NLRI_PARSE_OK ) {
 		return error;
 	}
 	parsedlen += psize;
@@ -430,7 +431,7 @@ int bgp_nlri_parse_ls_prefix(struct peer *peer, struct attr *attr,
 	}
 
 	error = bgp_nlri_parse_ls_node_local_desc(peer, attr, tlvdata, tlvdatalen);
-	if ( error != BGP_NLRI_PARSE_ERROR ) {
+	if ( error != BGP_NLRI_PARSE_OK ) {
 		return error;
 	}
 
@@ -440,14 +441,14 @@ int bgp_nlri_parse_ls_prefix(struct peer *peer, struct attr *attr,
 
 }
 
-void *bgp_ls_attr_intern( void *arg)
+static void *bgp_ls_attr_intern( void *arg)
 {
    ls_attr_type *lsattr = XCALLOC(MTYPE_BGP_LS_ATTR, sizeof(ls_attr_type));
    memcpy(lsattr, arg, sizeof(ls_attr_type));
    return lsattr;
 }
 
-void *bgp_ls_node_intern(void *arg)
+static void *bgp_ls_node_intern(void *arg)
 {
    ls_nlriattr_type *nlri = arg;
    ls_nlri_node *node = XCALLOC(MTYPE_BGP_LS_NODE, sizeof(ls_nlri_node));
@@ -456,7 +457,12 @@ void *bgp_ls_node_intern(void *arg)
    return node;
 }
 
-void *bgp_ls_link_intern(void *arg)
+static void *bgp_ls_alloc(void *arg)
+{
+   return arg;
+}
+
+static void *bgp_ls_link_intern(void *arg)
 {
    ls_nlriattr_type *nlri = arg;
    ls_nlri_link *link = XCALLOC(MTYPE_BGP_LS_LINK, sizeof(ls_nlri_link));
@@ -467,7 +473,7 @@ void *bgp_ls_link_intern(void *arg)
    return link;
 }
 
-void *bgp_ls_prefix_intern(void *arg)
+static void *bgp_ls_prefix_intern(void *arg)
 {
    ls_nlriattr_type *nlri = arg;
    ls_nlri_prefix *pfx = XCALLOC(MTYPE_BGP_LS_PREFIX, sizeof(ls_nlri_prefix));
@@ -477,39 +483,68 @@ void *bgp_ls_prefix_intern(void *arg)
    return pfx;
 }
 
-void bgp_ls_update_node(struct bgp *bgp, struct attr *attr)
+static void bgp_ls_update_node(struct bgp *bgp, struct attr *attr)
 {
-   ls_attr_type *lsattr = hash_get(bgp->lsattrhash, attr->ls_attr, bgp_ls_attr_intern);
-   ls_nlri_node *node = hash_get(bgp->lsnodenlrihash, attr->ls_nlri, bgp_ls_node_intern);
+   ls_nlri_node nodeToAdd;
+   nodeToAdd.ls_hdr = attr->ls_nlri.ls_hdr;
+   nodeToAdd.local = attr->ls_nlri.local;
+
+   ls_attr_type *lsattr = hash_get(bgp->lsattrhash, &attr->ls_attr, bgp_ls_attr_intern);
+   ls_nlri_node *node = hash_get(bgp->lsnodenlrihash, &nodeToAdd, bgp_ls_node_intern);
    node->ls_attr = lsattr;
 
-   if (!lsattr->nodenlrilist)
-      lsattr->nodenlrilist = list_new();
-   listnode_add(lsattr->nodenlrilist, node);
+   if (!lsattr->nodenlrihash)
+      lsattr->nodenlrihash = hash_create(lsnodenlrihash_key_make, lsnodenlrihash_cmp, "BGP LS Node NLRI hash");
+   hash_get(lsattr->nodenlrihash, node, bgp_ls_alloc);
 }
 
-void bgp_ls_update_link(struct bgp *bgp, struct attr *attr)
+static void bgp_ls_update_link(struct bgp *bgp, struct attr *attr)
 {
-   ls_attr_type *lsattr = hash_get(bgp->lsattrhash, attr->ls_attr, bgp_ls_attr_intern);
-   ls_nlri_link *link = hash_get(bgp->lslinknlrihash, attr->ls_nlri, bgp_ls_link_intern);
+   ls_nlri_link linkToAdd;
+   linkToAdd.ls_hdr = attr->ls_nlri.ls_hdr;
+   linkToAdd.local = attr->ls_nlri.local;
+   linkToAdd.remote = attr->ls_nlri.remote;
+   linkToAdd.link = attr->ls_nlri.link;
+
+   ls_attr_type *lsattr = hash_get(bgp->lsattrhash, &attr->ls_attr, bgp_ls_attr_intern);
+   ls_nlri_link *link = hash_get(bgp->lslinknlrihash, &linkToAdd, bgp_ls_link_intern);
    link->ls_attr = lsattr;
 
+   if (!lsattr->linknlrihash)
+      lsattr->linknlrihash = hash_create(lslinknlrihash_key_make, lslinknlrihash_cmp, "BGP LS Link NLRI hash");
+   hash_get(lsattr->linknlrihash, link, bgp_ls_alloc);
 }
 
-void bgp_ls_update_prefix4(struct bgp *bgp, struct attr *attr)
+static void bgp_ls_update_prefix4(struct bgp *bgp, struct attr *attr)
 {
-   ls_attr_type *lsattr = hash_get(bgp->lsattrhash, attr->ls_attr, bgp_ls_attr_intern);
-   ls_nlri_prefix *pfx = hash_get(bgp->lsprefix4nlrihash, attr->ls_nlri, bgp_ls_prefix_intern);
+   ls_nlri_prefix prefixToAdd;
+   prefixToAdd.ls_hdr = attr->ls_nlri.ls_hdr;
+   prefixToAdd.local = attr->ls_nlri.local;
+   prefixToAdd.prefix = attr->ls_nlri.prefix;
+
+   ls_attr_type *lsattr = hash_get(bgp->lsattrhash, &attr->ls_attr, bgp_ls_attr_intern);
+   ls_nlri_prefix *pfx = hash_get(bgp->lsprefix4nlrihash, &prefixToAdd, bgp_ls_prefix_intern);
    pfx->ls_attr = lsattr;
 
+   if (!lsattr->prefix4nlrihash)
+      lsattr->prefix4nlrihash = hash_create(lsprefixnlrihash_key_make, lsprefixnlrihash_cmp, "BGP LS Prefix4 NLRI hash");
+   hash_get(lsattr->prefix4nlrihash, pfx, bgp_ls_alloc);
 }
 
-void bgp_ls_update_prefix6(struct bgp *bgp, struct attr *attr)
+static void bgp_ls_update_prefix6(struct bgp *bgp, struct attr *attr)
 {
-   ls_attr_type *lsattr = hash_get(bgp->lsattrhash, attr->ls_attr, bgp_ls_attr_intern);
-   ls_nlri_prefix *pfx = hash_get(bgp->lsprefix6nlrihash, attr->ls_nlri, bgp_ls_prefix_intern);
+   ls_nlri_prefix prefixToAdd;
+   prefixToAdd.ls_hdr = attr->ls_nlri.ls_hdr;
+   prefixToAdd.local = attr->ls_nlri.local;
+   prefixToAdd.prefix = attr->ls_nlri.prefix;
+
+   ls_attr_type *lsattr = hash_get(bgp->lsattrhash, &attr->ls_attr, bgp_ls_attr_intern);
+   ls_nlri_prefix *pfx = hash_get(bgp->lsprefix6nlrihash, &prefixToAdd, bgp_ls_prefix_intern);
    pfx->ls_attr = lsattr;
 
+   if (!lsattr->prefix6nlrihash)
+      lsattr->prefix6nlrihash = hash_create(lsprefixnlrihash_key_make, lsprefixnlrihash_cmp, "BGP LS Prefix4 NLRI hash");
+   hash_get(lsattr->prefix6nlrihash, pfx, bgp_ls_alloc);
 }
 
 int bgp_nlri_parse_ls(struct peer *peer, struct attr *attr,

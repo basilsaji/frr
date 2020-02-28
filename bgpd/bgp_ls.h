@@ -152,10 +152,10 @@ typedef struct {
 	uint32_t prefix_seq_high;
 
    /* BGP LS NLRI lists */
-   struct list *nodenlrilist;
-   struct list *linknlrilist;
-   struct list *prefix4nlrilist;
-   struct list *prefix6nlrilist;
+   struct hash *nodenlrihash;
+   struct hash *linknlrihash;
+   struct hash *prefix4nlrihash;
+   struct hash *prefix6nlrihash;
 
 } ls_attr_type;
 

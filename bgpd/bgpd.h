@@ -1927,6 +1927,16 @@ extern void bgp_close(void);
 extern void bgp_free(struct bgp *);
 void bgp_gr_apply_running_config(void);
 
+/* BGP LS */
+extern unsigned int lsattrhash_key_make(const void *p);
+extern bool lsattrhash_cmp(const void *p1, const void *p2);
+extern unsigned int lsnodenlrihash_key_make(const void *p);
+extern bool lsnodenlrihash_cmp(const void *p1, const void *p2);
+extern unsigned int lslinknlrihash_key_make(const void *p);
+extern bool lslinknlrihash_cmp(const void *p1, const void *p2);
+extern unsigned int lsprefixnlrihash_key_make(const void *p);
+extern bool lsprefixnlrihash_cmp(const void *p1, const void *p2);
+
 /* BGP GR */
 int bgp_global_gr_init(struct bgp *bgp);
 int bgp_peer_gr_init(struct peer *peer);
