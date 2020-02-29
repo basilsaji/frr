@@ -152,6 +152,7 @@ const char *const node_names[] = {
 	"openfabric",		    // OPENFABRIC_NODE
 	"vrrp",			    /* VRRP_NODE */
 	"bmp",			 /* BMP_NODE */
+   "bgp ls spf",
 };
 /* clang-format on */
 
@@ -2847,9 +2848,13 @@ void install_default(enum node_type node)
 void cmd_init(int terminal)
 {
 	struct utsname names;
+   char debugstr[256];
 
-	if (array_size(node_names) != NODE_TYPE_MAX)
-		assert(!"Update the CLI node description array!");
+	if (array_size(node_names) != NODE_TYPE_MAX) {
+      sprintf(debugstr, "Update the CLI node description array!-%u %u", array_size(node_names), NODE_TYPE_MAX);
+      assert(!debugstr);
+		//assert(!"Update the CLI node description array!");
+   }
 
 	uname(&names);
 	qobj_init();

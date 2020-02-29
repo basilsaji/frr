@@ -182,12 +182,8 @@ static enum node_type bgp_node_type(afi_t afi, safi_t safi)
 			break;
 		}
 		break;
-/*
     case AFI_BGP_LS:
         switch (safi) {
-        case SAFI_BGP_LS:
-            return BGP_LS_NODE;
-            break;
         case SAFI_BGP_LS_SPF:
             return BGP_LS_SPF_NODE;
             break;
@@ -195,7 +191,6 @@ static enum node_type bgp_node_type(afi_t afi, safi_t safi)
             return BGP_IPV4_NODE;
             break;
         }
-*/
 	case AFI_L2VPN:
 		return BGP_EVPN_NODE;
 		break;
@@ -303,12 +298,9 @@ afi_t bgp_node_afi(struct vty *vty)
 	case BGP_EVPN_NODE:
 		afi = AFI_L2VPN;
 		break;
-/*
-    case BGP_LS_NODE:
-    case BGP_LS_SPF_NODE:
-        afi = AFI_BGP_LS;
-        break;
-*/
+   case BGP_LS_SPF_NODE:
+      afi = AFI_BGP_LS;
+      break;
 	default:
 		afi = AFI_IP;
 		break;
@@ -341,14 +333,9 @@ safi_t bgp_node_safi(struct vty *vty)
 	case BGP_FLOWSPECV6_NODE:
 		safi = SAFI_FLOWSPEC;
 		break;
-/*
-    case BGP_LS_NODE:
-        safi = SAFI_BGP_LS;
-        break;
-    case BGP_LS_SPF_NODE:
-        safi = SAFI_BGP_LS_SPF;
-        break;
-*/
+   case BGP_LS_SPF_NODE:
+      safi = SAFI_BGP_LS_SPF;
+      break;
 	default:
 		safi = SAFI_UNICAST;
 		break;
@@ -1857,8 +1844,8 @@ static int bgp_write_hex_update_vty(struct vty *vty, struct bgp *bgp, const char
 	int i = 0, j = 0;
 	char c;
 	int val;
-	char hexstr[VTY_BUFSIZ];
-	char ch[2];
+	unsigned char hexstr[VTY_BUFSIZ];
+	unsigned char ch[2];
 	int value;
 
 	confp = fopen(fname, "r");
@@ -1872,8 +1859,11 @@ static int bgp_write_hex_update_vty(struct vty *vty, struct bgp *bgp, const char
 	while ((getline(&buf, &len, confp)) != -1) {
 		vty_out(vty, "Len %d text: %s\n", len, buf);
 		j = 0;
+      memset(hexstr, 0, VTY_BUFSIZ);
 		for(i = 0; i < len; i++) {
-			sprintf(ch, "%c%c", buf[i], buf[i+1]);
+			//sprintf(ch, "%c%c", buf[i], buf[i+1]);
+         ch[0] = buf[i];
+         ch[1] = buf[i+1];
 			i++;
 			value = strtol(ch, NULL, 16);
 			hexstr[j] = (unsigned char)value;
@@ -8019,6 +8009,18 @@ DEFUN_NOSH (address_family_evpn,
 	return CMD_SUCCESS;
 }
 
+DEFUN_NOSH (address_family_ls_spf,
+       address_family_ls_spf_cmd,
+       "address-family ls ls-spf",
+       "Enter Address Family command mode\n"
+       "Address Family\n"
+       "Address Family modifier\n")
+{
+   VTY_DECLVAR_CONTEXT(bgp, bgp);
+   vty->node = BGP_LS_SPF_NODE;
+   return CMD_SUCCESS;
+}
+
 DEFUN_NOSH (exit_address_family,
        exit_address_family_cmd,
        "exit-address-family",
@@ -8030,7 +8032,8 @@ DEFUN_NOSH (exit_address_family,
 	    || vty->node == BGP_IPV6L_NODE || vty->node == BGP_VPNV6_NODE
 	    || vty->node == BGP_EVPN_NODE
 	    || vty->node == BGP_FLOWSPECV4_NODE
-	    || vty->node == BGP_FLOWSPECV6_NODE)
+	    || vty->node == BGP_FLOWSPECV6_NODE
+       || vty->node == BGP_LS_SPF_NODE)
 		vty->node = BGP_NODE;
 	return CMD_SUCCESS;
 }
@@ -8579,6 +8582,9 @@ DEFUN (show_bgp_memory,
 
 	if ((count = attr_unknown_count()))
 		vty_out(vty, "%ld unknown attributes\n", count);
+
+   if ((count = attr_ls_transit_count()))
+      vty_out(vty, "%ld LS attributes\n", count);
 
 	/* AS_PATH attributes */
 	count = aspath_count();
@@ -15000,7 +15006,10 @@ static void bgp_config_write_family(struct vty *vty, struct bgp *bgp, afi_t afi,
 	} else if (afi == AFI_L2VPN) {
 		if (safi == SAFI_EVPN)
 			vty_frame(vty, "l2vpn evpn");
-	}
+	} else if (afi ==AFI_BGP_LS) {
+      if (safi == SAFI_BGP_LS_SPF)
+         vty_frame(vty, "ls ls-spf");
+   }
 	vty_frame(vty, "\n");
 
 	bgp_config_write_distance(vty, bgp, afi, safi);
@@ -15353,6 +15362,9 @@ int bgp_config_write(struct vty *vty)
 		/* EVPN configuration.  */
 		bgp_config_write_family(vty, bgp, AFI_L2VPN, SAFI_EVPN);
 
+      /* EVPN configuration.  */
+      bgp_config_write_family(vty, bgp, AFI_BGP_LS, SAFI_BGP_LS_SPF);
+
 		hook_call(bgp_inst_config_write, bgp, vty);
 
 #if ENABLE_BGP_VNC
@@ -15411,6 +15423,9 @@ static struct cmd_node bgp_flowspecv4_node = {BGP_FLOWSPECV4_NODE,
 
 static struct cmd_node bgp_flowspecv6_node = {BGP_FLOWSPECV6_NODE,
 					 "%s(config-router-af-vpnv6)# ", 1};
+
+static struct cmd_node bgp_ls_spf_node = {BGP_LS_SPF_NODE,
+               "%s(config-router-ls-spf)# ", 1};
 
 static void community_list_vty(void);
 
@@ -15486,6 +15501,7 @@ void bgp_vty_init(void)
 	install_node(&bgp_evpn_vni_node, NULL);
 	install_node(&bgp_flowspecv4_node, NULL);
 	install_node(&bgp_flowspecv6_node, NULL);
+   install_node(&bgp_ls_spf_node, NULL);
 
 	/* Install default VTY commands to new nodes.  */
 	install_default(BGP_NODE);
@@ -15501,6 +15517,7 @@ void bgp_vty_init(void)
 	install_default(BGP_FLOWSPECV6_NODE);
 	install_default(BGP_EVPN_NODE);
 	install_default(BGP_EVPN_VNI_NODE);
+   install_default(BGP_LS_SPF_NODE);
 
 	/* "bgp local-mac" hidden commands. */
 	install_element(CONFIG_NODE, &bgp_local_mac_cmd);
@@ -15763,6 +15780,7 @@ void bgp_vty_init(void)
 	install_element(BGP_FLOWSPECV4_NODE, &neighbor_activate_cmd);
 	install_element(BGP_FLOWSPECV6_NODE, &neighbor_activate_cmd);
 	install_element(BGP_EVPN_NODE, &neighbor_activate_cmd);
+   install_element(BGP_LS_SPF_NODE, &neighbor_activate_cmd);
 
 	/* "no neighbor activate" commands. */
 	install_element(BGP_NODE, &no_neighbor_activate_hidden_cmd);
@@ -15777,6 +15795,7 @@ void bgp_vty_init(void)
 	install_element(BGP_FLOWSPECV4_NODE, &no_neighbor_activate_cmd);
 	install_element(BGP_FLOWSPECV6_NODE, &no_neighbor_activate_cmd);
 	install_element(BGP_EVPN_NODE, &no_neighbor_activate_cmd);
+   install_element(BGP_LS_SPF_NODE, &no_neighbor_activate_cmd);
 
 	/* "neighbor peer-group" set commands. */
 	install_element(BGP_NODE, &neighbor_set_peer_group_cmd);
@@ -16612,6 +16631,7 @@ void bgp_vty_init(void)
 #endif /* KEEP_OLD_VPN_COMMANDS */
 
 	install_element(BGP_NODE, &address_family_evpn_cmd);
+   install_element(BGP_NODE, &address_family_ls_spf_cmd);
 
 	/* "exit-address-family" command. */
 	install_element(BGP_IPV4_NODE, &exit_address_family_cmd);
@@ -16625,6 +16645,7 @@ void bgp_vty_init(void)
 	install_element(BGP_FLOWSPECV4_NODE, &exit_address_family_cmd);
 	install_element(BGP_FLOWSPECV6_NODE, &exit_address_family_cmd);
 	install_element(BGP_EVPN_NODE, &exit_address_family_cmd);
+   install_element(BGP_LS_SPF_NODE, &exit_address_family_cmd);
 
 	/* "clear ip bgp commands" */
 	install_element(ENABLE_NODE, &clear_ip_bgp_all_cmd);
