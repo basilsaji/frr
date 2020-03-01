@@ -8583,7 +8583,7 @@ DEFUN (show_bgp_memory,
 	if ((count = attr_unknown_count()))
 		vty_out(vty, "%ld unknown attributes\n", count);
 
-   if ((count = attr_ls_transit_count()))
+   if ((count = ls_attr_transit_count()))
       vty_out(vty, "%ld LS attributes\n", count);
 
 	/* AS_PATH attributes */

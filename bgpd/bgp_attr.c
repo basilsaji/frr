@@ -98,6 +98,8 @@ static const struct message attr_flag_str[] = {
 
 static struct hash *cluster_hash;
 
+static bgp_attr_parse_ret_t bgp_attr_ls_transit(struct bgp_attr_parser_args *args);
+
 static void *cluster_hash_alloc(void *p)
 {
 	const struct cluster_list *val = (const struct cluster_list *)p;
@@ -438,6 +440,33 @@ static void transit_unintern(struct transit **transit)
 	}
 }
 
+/* Unknown transit attribute. */
+static struct hash *ls_transit_hash;
+
+static struct transit *ls_transit_intern(struct transit *transit)
+{
+   struct transit *find;
+
+   find = hash_get(ls_transit_hash, transit, transit_hash_alloc);
+   if (find != transit)
+      transit_free(transit);
+   find->refcnt++;
+
+   return find;
+}
+
+static void ls_transit_unintern(struct transit **transit)
+{
+   if ((*transit)->refcnt)
+      (*transit)->refcnt--;
+
+   if ((*transit)->refcnt == 0) {
+      hash_release(ls_transit_hash, *transit);
+      transit_free(*transit);
+      *transit = NULL;
+   }
+}
+
 static void *srv6_l3vpn_hash_alloc(void *p)
 {
 	return p;
@@ -619,6 +648,19 @@ static void transit_finish(void)
 	transit_hash = NULL;
 }
 
+static void ls_transit_init(void)
+{
+   ls_transit_hash = hash_create(transit_hash_key_make, transit_hash_cmp,
+               "BGP LS Transit Hash");
+}
+
+static void ls_transit_finish(void)
+{
+   hash_clean(ls_transit_hash, (void (*)(void *))transit_free);
+   hash_free(ls_transit_hash);
+   ls_transit_hash = NULL;
+}
+
 /* Attribute hash routines. */
 static struct hash *attrhash;
 
@@ -630,6 +672,11 @@ unsigned long int attr_count(void)
 unsigned long int attr_unknown_count(void)
 {
 	return transit_hash->count;
+}
+
+unsigned long int ls_attr_transit_count(void)
+{
+   return ls_transit_hash->count;
 }
 
 unsigned int attrhash_key_make(const void *p)
@@ -659,6 +706,8 @@ unsigned int attrhash_key_make(const void *p)
 		MIX(cluster_hash_key_make(attr->cluster));
 	if (attr->transit)
 		MIX(transit_hash_key_make(attr->transit));
+   if (attr->ls_transit)
+      MIX(transit_hash_key_make(attr->ls_transit));
 	if (attr->encap_subtlvs)
 		MIX(encap_hash_key_make(attr->encap_subtlvs));
 #if ENABLE_BGP_VNC
@@ -696,6 +745,7 @@ bool attrhash_cmp(const void *p1, const void *p2)
 		    && attr1->lcommunity == attr2->lcommunity
 		    && attr1->cluster == attr2->cluster
 		    && attr1->transit == attr2->transit
+          && attr1->ls_transit == attr2->ls_transit
 		    && attr1->rmap_table_id == attr2->rmap_table_id
 		    && (attr1->encap_tunneltype == attr2->encap_tunneltype)
 		    && encap_same(attr1->encap_subtlvs, attr2->encap_subtlvs)
@@ -838,6 +888,12 @@ struct attr *bgp_attr_intern(struct attr *attr)
 		else
 			attr->transit->refcnt++;
 	}
+   if (attr->ls_transit) {
+      if (!attr->ls_transit->refcnt)
+         attr->ls_transit = transit_intern(attr->ls_transit);
+      else
+         attr->ls_transit->refcnt++;
+   }
 	if (attr->encap_subtlvs) {
 		if (!attr->encap_subtlvs->refcnt)
 			attr->encap_subtlvs = encap_intern(attr->encap_subtlvs,
@@ -1039,6 +1095,9 @@ void bgp_attr_unintern_sub(struct attr *attr)
 
 	if (attr->transit)
 		transit_unintern(&attr->transit);
+
+   if (attr->ls_transit)
+      ls_transit_unintern(&attr->ls_transit);
 
 	if (attr->encap_subtlvs)
 		encap_unintern(&attr->encap_subtlvs, ENCAP_SUBTLV_TYPE);
@@ -1969,6 +2028,12 @@ int bgp_mp_reach_parse(struct bgp_attr_parser_args *args,
 		return BGP_ATTR_PARSE_ERROR;
 	}
 
+   /* HACK */
+   if (afi == AFI_BGP_LS && safi == SAFI_BGP_LS_SPF) {
+      stream_set_getp(s, start);
+      return bgp_attr_ls_transit(args);
+   }
+
 	/* Get nexthop length. */
 	attr->mp_nexthop_len = stream_getc(s);
 
@@ -2129,11 +2194,13 @@ int bgp_mp_unreach_parse(struct bgp_attr_parser_args *args,
 	iana_safi_t pkt_safi;
 	safi_t safi;
 	uint16_t withdraw_len;
+   size_t start;
 	struct peer *const peer = args->peer;
 	struct attr *const attr = args->attr;
 	const bgp_size_t length = args->length;
 
 	s = peer->curr;
+   start = stream_get_getp(s);
 
 #define BGP_MP_UNREACH_MIN_SIZE 3
 	if ((length > STREAM_READABLE(s)) || (length < BGP_MP_UNREACH_MIN_SIZE))
@@ -2155,6 +2222,12 @@ int bgp_mp_unreach_parse(struct bgp_attr_parser_args *args,
 				iana_safi2str(pkt_safi));
 		return BGP_ATTR_PARSE_ERROR;
 	}
+
+   /* HACK */
+   if (afi == AFI_BGP_LS && safi == SAFI_BGP_LS_SPF) {
+      stream_set_getp(s, start);
+      return bgp_attr_ls_transit(args);
+   }
 
 	withdraw_len = length - BGP_MP_UNREACH_MIN_SIZE;
 
@@ -2730,6 +2803,58 @@ bgp_attr_pmsi_tunnel(struct bgp_attr_parser_args *args)
 	return BGP_ATTR_PARSE_PROCEED;
 }
 
+/* BGP LS attributes transit treatment. */
+static bgp_attr_parse_ret_t bgp_attr_ls_transit(struct bgp_attr_parser_args *args)
+{
+   bgp_size_t total = args->total;
+   struct transit *transit;
+   struct peer *const peer = args->peer;
+   struct attr *const attr = args->attr;
+   uint8_t *const startp = args->startp;
+   const uint8_t type = args->type;
+   const uint8_t flag = args->flags;
+   const bgp_size_t length = args->length;
+
+   if (bgp_debug_update(peer, NULL, NULL, 1))
+      zlog_debug(
+         "%s LS attribute is received (type %d, length %d)",
+         peer->host, type, length);
+
+   /* Forward read pointer of input stream. */
+   stream_forward_getp(peer->curr, length);
+
+   /* If any of the mandatory well-known attributes are not recognized,
+      then the Error Subcode is set to Unrecognized Well-known
+      Attribute.  The Data field contains the unrecognized attribute
+      (type, length and value). */
+   if (!CHECK_FLAG(flag, BGP_ATTR_FLAG_OPTIONAL)) {
+      return bgp_attr_malformed(args, BGP_NOTIFY_UPDATE_UNREC_ATTR,
+                 args->total);
+   }
+
+   /* Unrecognized non-transitive optional attributes must be quietly
+      ignored and not passed along to other BGP peers. */
+   if (!CHECK_FLAG(flag, BGP_ATTR_FLAG_TRANS))
+      return BGP_ATTR_PARSE_PROCEED;
+
+   /* Store transitive attribute to the end of attr->transit. */
+   if (!attr->ls_transit)
+      attr->ls_transit = XCALLOC(MTYPE_TRANSIT, sizeof(struct transit));
+
+   transit = attr->ls_transit;
+
+   if (transit->val)
+      transit->val = XREALLOC(MTYPE_TRANSIT_VAL, transit->val,
+               transit->length + total);
+   else
+      transit->val = XMALLOC(MTYPE_TRANSIT_VAL, total);
+
+   memcpy(transit->val + transit->length, startp, total);
+   transit->length += total;
+
+   return BGP_ATTR_PARSE_PROCEED;
+}
+
 /* BGP unknown attribute treatment. */
 static bgp_attr_parse_ret_t bgp_attr_unknown(struct bgp_attr_parser_args *args)
 {
@@ -3076,7 +3201,8 @@ bgp_attr_parse_ret_t bgp_attr_parse(struct peer *peer, struct attr *attr,
 			ret = bgp_attr_pmsi_tunnel(&attr_args);
 			break;
 		case BGP_ATTR_LS:
-			ret = bgp_attr_ls_parse(&attr_args);
+			//ret = bgp_attr_ls_parse(&attr_args);
+         ret = bgp_attr_ls_transit(&attr_args);
 			break;
 		default:
 			ret = bgp_attr_unknown(&attr_args);
@@ -3214,6 +3340,8 @@ done:
 		/* Finally intern unknown attribute. */
 		if (attr->transit)
 			attr->transit = transit_intern(attr->transit);
+      if (attr->ls_transit)
+         attr->transit = ls_transit_intern(attr->ls_transit);
 		if (attr->encap_subtlvs)
 			attr->encap_subtlvs = encap_intern(attr->encap_subtlvs,
 							   ENCAP_SUBTLV_TYPE);
@@ -3227,6 +3355,10 @@ done:
 			transit_free(attr->transit);
 			attr->transit = NULL;
 		}
+      if (attr->ls_transit) {
+         transit_free(attr->ls_transit);
+         attr->ls_transit = NULL;
+      }
 
 		bgp_attr_flush_encap(attr);
 	};
@@ -3234,6 +3366,8 @@ done:
 	/* Sanity checks */
 	if (attr->transit)
 		assert(attr->transit->refcnt > 0);
+   if (attr->ls_transit)
+      assert(attr->ls_transit->refcnt > 0);
 	if (attr->encap_subtlvs)
 		assert(attr->encap_subtlvs->refcnt > 0);
 #if ENABLE_BGP_VNC
@@ -4400,6 +4534,7 @@ void bgp_attr_init(void)
 	transit_init();
 	encap_init();
 	srv6_init();
+   ls_transit_init();
 }
 
 void bgp_attr_finish(void)
@@ -4413,6 +4548,7 @@ void bgp_attr_finish(void)
 	transit_finish();
 	encap_finish();
 	srv6_finish();
+   ls_transit_finish();
 }
 
 /* Make attribute packet. */

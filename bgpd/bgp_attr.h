@@ -187,6 +187,9 @@ struct attr {
 	/* Unknown transitive attribute. */
 	struct transit *transit;
 
+   /* LS transit attribute */
+   struct transit *ls_transit;
+
 	struct in_addr mp_nexthop_global_in;
 
 	/* Aggregator Router ID attribute */
@@ -339,6 +342,7 @@ extern unsigned int attrhash_key_make(const void *);
 extern void attr_show_all(struct vty *);
 extern unsigned long int attr_count(void);
 extern unsigned long int attr_unknown_count(void);
+extern unsigned long int ls_attr_transit_count(void);
 
 /* Cluster list prototypes. */
 extern int cluster_loop_check(struct cluster_list *, struct in_addr);
