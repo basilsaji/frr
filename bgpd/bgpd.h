@@ -98,6 +98,7 @@ enum bgp_af_index {
 	BGP_AF_IPV6_LBL_UNICAST,
 	BGP_AF_IPV4_FLOWSPEC,
 	BGP_AF_IPV6_FLOWSPEC,
+   BGP_AF_LS_LS_SPF,
 	BGP_AF_MAX
 };
 
@@ -2035,6 +2036,15 @@ static inline int afindex(afi_t afi, safi_t safi)
 			return BGP_AF_MAX;
 			break;
 		}
+   case AFI_BGP_LS:
+      switch (safi) {
+      case SAFI_BGP_LS_SPF:
+         return BGP_AF_LS_LS_SPF;
+         break;
+      default:
+         return BGP_AF_MAX;
+         break;
+      }
 	default:
 		return BGP_AF_MAX;
 		break;
