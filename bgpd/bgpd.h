@@ -319,13 +319,6 @@ struct bgp {
 
 	struct hash *update_groups[BGP_AF_MAX];
 
-   /* BGP LS database */
-   struct hash *lsattrhash;
-   struct hash *lsnodenlrihash;
-   struct hash *lslinknlrihash;
-   struct hash *lsprefix4nlrihash;
-   struct hash *lsprefix6nlrihash;
-
 	/*
 	 * Global statistics for update groups.
 	 */
@@ -1927,16 +1920,6 @@ extern int peer_af_delete(struct peer *, afi_t, safi_t);
 extern void bgp_close(void);
 extern void bgp_free(struct bgp *);
 void bgp_gr_apply_running_config(void);
-
-/* BGP LS */
-extern unsigned int lsattrhash_key_make(const void *p);
-extern bool lsattrhash_cmp(const void *p1, const void *p2);
-extern unsigned int lsnodenlrihash_key_make(const void *p);
-extern bool lsnodenlrihash_cmp(const void *p1, const void *p2);
-extern unsigned int lslinknlrihash_key_make(const void *p);
-extern bool lslinknlrihash_cmp(const void *p1, const void *p2);
-extern unsigned int lsprefixnlrihash_key_make(const void *p);
-extern bool lsprefixnlrihash_cmp(const void *p1, const void *p2);
 
 /* BGP GR */
 int bgp_global_gr_init(struct bgp *bgp);

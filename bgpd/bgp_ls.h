@@ -79,14 +79,15 @@ typedef enum {
 } bgp_ls_linknlri_data_bits;
 
 typedef enum {
-	LS_NODE_ATTR_SPF_CAP = 1,
-	LS_NODE_ATTR_SPF_STATUS = 2,
+	LS_NODE_ATTR_SPF_CAP = 1180,
+	LS_NODE_ATTR_SPF_STATUS = 1184,
 	LS_LINK_ATTR_PREFIX_LEN = 3,
-	LS_LINK_ATTR_SPF_STATUS = 4,
+	LS_LINK_ATTR_SPF_STATUS = 1182,
 	LS_LINK_IGP_METRIC = 1095,
 	LS_PREFIX_ATTR_METRIC = 1155,
-	LS_PREFIX_ATTR_SPF_STATUS = 5,
-	LS_PREFIX_ATTR_SEQ = 6,
+	LS_PREFIX_ATTR_SPF_STATUS = 1183,
+	LS_PREFIX_ATTR_SEQ = 1181,
+   LS_PREFIX_ATTR_IGP_FLAGS = 1152,
 } bgp_ls_attr_tlv_type;
 
 typedef enum {
@@ -98,6 +99,7 @@ typedef enum {
 	LS_PREFIX_ATTR_METRIC_PRESENT = 6,
 	LS_PREFIX_ATTR_SPF_STATUS_PRESENT = 7,
 	LS_PREFIX_ATTR_SEQ_PRESENT = 8,
+   LS_PREFIX_ATTR_IGP_FLAGS_PRESENT = 9,
 } bgp_ls_attr_tlv_bit;
 
 typedef enum {
@@ -109,18 +111,6 @@ typedef enum {
 	LS_OSPFV3 = 6,
 	LS_BGP = 7
 } bgp_ls_protocol_id;
-
-typedef struct {
-	/* Length of the IGP Router ID
-	 * 4 - OSPFv2/OSPFv3 non pseudo node
-	 * 8 - OSPFv2/OSPFv3 pseudo node
-	 * 6 - ISIS non pseudo node
-	 * 7 - ISIS pseudo node
-	 */
-	uint8_t	len;
-
-	uint8_t val[8];
-} bgp_ls_igp_router_id;
 
 typedef struct {
 	/* BGP LS ATTR present bits */
@@ -148,134 +138,45 @@ typedef struct {
 	uint8_t prefix_spf_status;
 
 	/* BGP LS seq lower/higher */
-	uint32_t prefix_seq_low;
-	uint32_t prefix_seq_high;
+	uint64_t prefix_seq;
 
-   /* BGP LS NLRI lists */
-   struct hash *nodenlrihash;
-   struct hash *linknlrihash;
-   struct hash *prefix4nlrihash;
-   struct hash *prefix6nlrihash;
+   uint8_t igp_flags;
 
 } ls_attr_type;
 
-typedef struct {
-   /* BGP LS protocol id */
-   uint16_t protocol_id;
-
-   /* BGP LS identifier */
-   uint16_t identifier;
-
-} ls_header_type;
-
-typedef struct {
-   /* BGP LS nlri flags to set which values are set */
-   uint64_t flag;
-
-   /* BGP LS local node desc bgp router id */
-   uint32_t bgp_router_id;
-
-   /* BGP LS local node desc as */
-   uint32_t as;
-
-   /* BGP LS IGP Router ID */
-   bgp_ls_igp_router_id igp_router_id;
-
-   /* BGP LS Identifier */
-   uint32_t ls_id;
-
-} ls_nodedesc_type;
-
-typedef struct {
-   /* BGP LS nlri flags to set which values are set */
-   uint64_t flag;
-
-   /* BGP LS Local link IPv4 address */
-   struct in_addr link_local_ipv4;
-
-   /* BGP LS Remote link IPv4 address */
-   struct in_addr link_remote_ipv4;
-
-   /* BGP LS Local id */
-   uint32_t link_localid;
-
-   /* BGP LS Remote id */
-   uint32_t link_remoteid;
-
-   /* BGP LS Local link IPv6 address */
-   struct in6_addr link_local_ipv6;
-
-   /* BGP LS Remote link IPv6 address */
-   struct in6_addr link_remote_ipv6;
-
-} ls_linkdesc_type;
-
-typedef struct {
-   /* BGP LS nlri flags to set which values are set */
-   uint64_t flag;
-
-   /* BGP LS IP Reach prefix */
-   struct prefix p;
-
-} ls_prefixdesc_type;
-
-typedef struct {
-   ls_header_type ls_hdr;
-   ls_nodedesc_type local;
-
-   /* Pointer back to ls attribute */
-   ls_attr_type *ls_attr;
-
-} ls_nlri_node;
-
-typedef struct {
-   ls_header_type ls_hdr;
-   ls_nodedesc_type local;
-   ls_nodedesc_type remote;
-   ls_linkdesc_type link;
-
-   /* Pointer back to ls attribute */
-   ls_attr_type *ls_attr;
-
-} ls_nlri_link;
-
-typedef struct {
-   ls_header_type ls_hdr;
-   ls_nodedesc_type local;
-   ls_prefixdesc_type prefix;
-
-   /* Pointer back to ls attribute */
-   ls_attr_type *ls_attr;
-
-} ls_nlri_prefix;
-
-typedef struct {
+struct ls_nlri {
    /* BGP LS nlri attr type */
    uint16_t type;
 
-   ls_header_type ls_hdr;
+   struct bgp_ls_header ls_hdr;
 
-   ls_nodedesc_type local;
-   ls_nodedesc_type remote;
-   ls_linkdesc_type link;
-   ls_prefixdesc_type prefix;
+   struct bgp_ls_nodedesc local;
+   struct bgp_ls_nodedesc remote;
+   struct bgp_ls_linkdesc link;
+   struct bgp_ls_prefixdesc prefix;
 
-} ls_nlriattr_type;
+};
 
-extern int bgp_nlri_parse_ls_node_local_desc(struct peer *peer, struct attr *attr,
+extern int bgp_nlri_parse_ls_node_local_desc(struct peer *peer, struct ls_nlri *nlri,
 	uint8_t *data, uint16_t length);
-extern int bgp_nlri_parse_ls_node_remote_desc(struct peer *peer, struct attr *attr,
+extern int bgp_nlri_parse_ls_node_remote_desc(struct peer *peer, struct ls_nlri *ls_nlri,
 	uint8_t *data, uint16_t length);
-extern int bgp_nlri_parse_ls_link_desc(struct peer *peer, struct attr *attr,
+extern int bgp_nlri_parse_ls_link_desc(struct peer *peer, struct ls_nlri *ls_nlri,
 	uint8_t *data, uint16_t length);
-extern int bgp_nlri_parse_ls_prefix_desc(struct peer *peer, struct attr *attr,
-	uint8_t *data, uint16_t length, uint8_t afi);
-extern int bgp_nlri_parse_ls_node(struct peer *peer, struct attr *attr,
+extern int bgp_nlri_parse_ls_prefix_desc(struct peer *peer, struct ls_nlri *ls_nlri,
+	uint8_t *data, uint16_t length, afi_t afi);
+extern int bgp_nlri_parse_ls_node(struct peer *peer, struct ls_nlri *ls_nlri,
 	uint8_t *data, uint16_t length);
-extern int bgp_nlri_parse_ls_link(struct peer *peer, struct attr *attr,
+extern int bgp_nlri_parse_ls_link(struct peer *peer, struct ls_nlri *ls_nlri,
 	uint8_t *data, uint16_t length);
-extern int bgp_nlri_parse_ls_prefix(struct peer *peer, struct attr *attr,
-	uint8_t *data, uint16_t length, uint8_t afi);
+extern int bgp_nlri_parse_ls_prefix(struct peer *peer, struct ls_nlri *nlri,
+          uint8_t *data, uint16_t length, afi_t afi);
+extern int bgp_process_ls_node_nlri(struct peer *peer, afi_t afi, safi_t safi, struct attr *attr,
+                             uint8_t *data, uint16_t length);
+extern int bgp_process_ls_link_nlri(struct peer *peer, afi_t afi, safi_t safi, struct attr *attr,
+                             uint8_t *data, uint16_t length);
+extern int bgp_process_ls_prefix_nlri(struct peer *peer, afi_t afi, safi_t safi, struct attr *attr,
+                             uint8_t *data, uint16_t length, afi_t pafi, uint8_t type);
 extern int bgp_nlri_parse_ls(struct peer *peer, struct attr *attr,
 	struct bgp_nlri *packet, int mp_withdraw);
 

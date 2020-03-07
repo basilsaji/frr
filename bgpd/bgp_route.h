@@ -253,6 +253,7 @@ struct bgp_path_info {
 # define BGP_ROUTE_RFP          4
 #endif
 #define BGP_ROUTE_IMPORTED     5        /* from another bgp instance/safi */
+#define BGP_ROUTE_LS           6
 
 	unsigned short instance;
 

@@ -98,8 +98,6 @@ static const struct message attr_flag_str[] = {
 
 static struct hash *cluster_hash;
 
-static bgp_attr_parse_ret_t bgp_attr_ls_transit(struct bgp_attr_parser_args *args);
-
 static void *cluster_hash_alloc(void *p)
 {
 	const struct cluster_list *val = (const struct cluster_list *)p;
@@ -440,33 +438,6 @@ static void transit_unintern(struct transit **transit)
 	}
 }
 
-/* Unknown transit attribute. */
-static struct hash *ls_transit_hash;
-
-static struct transit *ls_transit_intern(struct transit *transit)
-{
-   struct transit *find;
-
-   find = hash_get(ls_transit_hash, transit, transit_hash_alloc);
-   if (find != transit)
-      transit_free(transit);
-   find->refcnt++;
-
-   return find;
-}
-
-static void ls_transit_unintern(struct transit **transit)
-{
-   if ((*transit)->refcnt)
-      (*transit)->refcnt--;
-
-   if ((*transit)->refcnt == 0) {
-      hash_release(ls_transit_hash, *transit);
-      transit_free(*transit);
-      *transit = NULL;
-   }
-}
-
 static void *srv6_l3vpn_hash_alloc(void *p)
 {
 	return p;
@@ -600,6 +571,22 @@ static bool srv6_vpn_same(const struct bgp_attr_srv6_vpn *h1,
 		return srv6_vpn_hash_cmp((const void *)h1, (const void *)h2);
 }
 
+static bool ls_attr_same(const ls_attr_type *attr1, const ls_attr_type *attr2)
+{
+   if( attr1->flag == attr2->flag &&
+       attr1->spf_algo == attr2->spf_algo &&
+       attr1->node_spf_status == attr2->node_spf_status &&
+       attr1->link_igp_metric == attr2->link_igp_metric &&
+       attr1->link_prefix_len == attr2->link_prefix_len &&
+       attr1->link_spf_status == attr2->link_spf_status &&
+       attr1->prefix_metric == attr2->prefix_metric &&
+       attr1->prefix_spf_status == attr2->prefix_spf_status &&
+       attr1->prefix_seq == attr2->prefix_seq &&
+       attr1->igp_flags == attr2->igp_flags )
+      return true;
+   return false;
+}
+
 static void srv6_init(void)
 {
 	srv6_l3vpn_hash =
@@ -648,19 +635,6 @@ static void transit_finish(void)
 	transit_hash = NULL;
 }
 
-static void ls_transit_init(void)
-{
-   ls_transit_hash = hash_create(transit_hash_key_make, transit_hash_cmp,
-               "BGP LS Transit Hash");
-}
-
-static void ls_transit_finish(void)
-{
-   hash_clean(ls_transit_hash, (void (*)(void *))transit_free);
-   hash_free(ls_transit_hash);
-   ls_transit_hash = NULL;
-}
-
 /* Attribute hash routines. */
 static struct hash *attrhash;
 
@@ -672,11 +646,6 @@ unsigned long int attr_count(void)
 unsigned long int attr_unknown_count(void)
 {
 	return transit_hash->count;
-}
-
-unsigned long int ls_attr_transit_count(void)
-{
-   return ls_transit_hash->count;
 }
 
 unsigned int attrhash_key_make(const void *p)
@@ -706,8 +675,6 @@ unsigned int attrhash_key_make(const void *p)
 		MIX(cluster_hash_key_make(attr->cluster));
 	if (attr->transit)
 		MIX(transit_hash_key_make(attr->transit));
-   if (attr->ls_transit)
-      MIX(transit_hash_key_make(attr->ls_transit));
 	if (attr->encap_subtlvs)
 		MIX(encap_hash_key_make(attr->encap_subtlvs));
 #if ENABLE_BGP_VNC
@@ -745,7 +712,6 @@ bool attrhash_cmp(const void *p1, const void *p2)
 		    && attr1->lcommunity == attr2->lcommunity
 		    && attr1->cluster == attr2->cluster
 		    && attr1->transit == attr2->transit
-          && attr1->ls_transit == attr2->ls_transit
 		    && attr1->rmap_table_id == attr2->rmap_table_id
 		    && (attr1->encap_tunneltype == attr2->encap_tunneltype)
 		    && encap_same(attr1->encap_subtlvs, attr2->encap_subtlvs)
@@ -765,7 +731,8 @@ bool attrhash_cmp(const void *p1, const void *p2)
 		    && attr1->nh_lla_ifindex == attr2->nh_lla_ifindex
 		    && attr1->distance == attr2->distance
 		    && srv6_l3vpn_same(attr1->srv6_l3vpn, attr2->srv6_l3vpn)
-		    && srv6_vpn_same(attr1->srv6_vpn, attr2->srv6_vpn))
+		    && srv6_vpn_same(attr1->srv6_vpn, attr2->srv6_vpn)
+          && ls_attr_same(&attr1->ls_attr, &attr2->ls_attr))
 			return true;
 	}
 
@@ -888,12 +855,6 @@ struct attr *bgp_attr_intern(struct attr *attr)
 		else
 			attr->transit->refcnt++;
 	}
-   if (attr->ls_transit) {
-      if (!attr->ls_transit->refcnt)
-         attr->ls_transit = transit_intern(attr->ls_transit);
-      else
-         attr->ls_transit->refcnt++;
-   }
 	if (attr->encap_subtlvs) {
 		if (!attr->encap_subtlvs->refcnt)
 			attr->encap_subtlvs = encap_intern(attr->encap_subtlvs,
@@ -1095,9 +1056,6 @@ void bgp_attr_unintern_sub(struct attr *attr)
 
 	if (attr->transit)
 		transit_unintern(&attr->transit);
-
-   if (attr->ls_transit)
-      ls_transit_unintern(&attr->ls_transit);
 
 	if (attr->encap_subtlvs)
 		encap_unintern(&attr->encap_subtlvs, ENCAP_SUBTLV_TYPE);
@@ -1975,10 +1933,20 @@ int bgp_attr_ls_parse(struct bgp_attr_parser_args *args)
 				attr->ls_attr.prefix_spf_status = *(pnt + BGP_LS_TLV_HEADER_LEN);
 				attr->ls_attr.flag |= ATTR_FLAG_BIT(LS_PREFIX_ATTR_SPF_STATUS_PRESENT);
 				break;
+         case LS_PREFIX_ATTR_IGP_FLAGS:
+            attr->ls_attr.igp_flags = *(pnt + BGP_LS_TLV_HEADER_LEN);
+            attr->ls_attr.flag |= ATTR_FLAG_BIT(LS_PREFIX_ATTR_IGP_FLAGS_PRESENT);
+            break;
+         case LS_PREFIX_ATTR_SEQ:
+            attr->ls_attr.prefix_seq = *((uint64_t *)(pnt + BGP_LS_TLV_HEADER_LEN));
+            attr->ls_attr.flag |= ATTR_FLAG_BIT(LS_PREFIX_ATTR_SEQ_PRESENT);
+            break;
 			default:
-				return BGP_NLRI_PARSE_ERROR;
+				return BGP_ATTR_PARSE_ERROR;
 		}
 	}
+   stream_forward_getp(peer->curr, length);
+   attr->flag |= ATTR_FLAG_BIT(BGP_ATTR_LS);
 	return 0;
 }
 
@@ -2027,12 +1995,6 @@ int bgp_mp_reach_parse(struct bgp_attr_parser_args *args,
 				iana_safi2str(pkt_safi));
 		return BGP_ATTR_PARSE_ERROR;
 	}
-
-   /* HACK */
-   if (afi == AFI_BGP_LS && safi == SAFI_BGP_LS_SPF) {
-      stream_set_getp(s, start);
-      return bgp_attr_ls_transit(args);
-   }
 
 	/* Get nexthop length. */
 	attr->mp_nexthop_len = stream_getc(s);
@@ -2194,13 +2156,11 @@ int bgp_mp_unreach_parse(struct bgp_attr_parser_args *args,
 	iana_safi_t pkt_safi;
 	safi_t safi;
 	uint16_t withdraw_len;
-   size_t start;
 	struct peer *const peer = args->peer;
 	struct attr *const attr = args->attr;
 	const bgp_size_t length = args->length;
 
 	s = peer->curr;
-   start = stream_get_getp(s);
 
 #define BGP_MP_UNREACH_MIN_SIZE 3
 	if ((length > STREAM_READABLE(s)) || (length < BGP_MP_UNREACH_MIN_SIZE))
@@ -2222,12 +2182,6 @@ int bgp_mp_unreach_parse(struct bgp_attr_parser_args *args,
 				iana_safi2str(pkt_safi));
 		return BGP_ATTR_PARSE_ERROR;
 	}
-
-   /* HACK */
-   if (afi == AFI_BGP_LS && safi == SAFI_BGP_LS_SPF) {
-      stream_set_getp(s, start);
-      return bgp_attr_ls_transit(args);
-   }
 
 	withdraw_len = length - BGP_MP_UNREACH_MIN_SIZE;
 
@@ -2803,58 +2757,6 @@ bgp_attr_pmsi_tunnel(struct bgp_attr_parser_args *args)
 	return BGP_ATTR_PARSE_PROCEED;
 }
 
-/* BGP LS attributes transit treatment. */
-static bgp_attr_parse_ret_t bgp_attr_ls_transit(struct bgp_attr_parser_args *args)
-{
-   bgp_size_t total = args->total;
-   struct transit *transit;
-   struct peer *const peer = args->peer;
-   struct attr *const attr = args->attr;
-   uint8_t *const startp = args->startp;
-   const uint8_t type = args->type;
-   const uint8_t flag = args->flags;
-   const bgp_size_t length = args->length;
-
-   if (bgp_debug_update(peer, NULL, NULL, 1))
-      zlog_debug(
-         "%s LS attribute is received (type %d, length %d)",
-         peer->host, type, length);
-
-   /* Forward read pointer of input stream. */
-   stream_forward_getp(peer->curr, length);
-
-   /* If any of the mandatory well-known attributes are not recognized,
-      then the Error Subcode is set to Unrecognized Well-known
-      Attribute.  The Data field contains the unrecognized attribute
-      (type, length and value). */
-   if (!CHECK_FLAG(flag, BGP_ATTR_FLAG_OPTIONAL)) {
-      return bgp_attr_malformed(args, BGP_NOTIFY_UPDATE_UNREC_ATTR,
-                 args->total);
-   }
-
-   /* Unrecognized non-transitive optional attributes must be quietly
-      ignored and not passed along to other BGP peers. */
-   if (!CHECK_FLAG(flag, BGP_ATTR_FLAG_TRANS))
-      return BGP_ATTR_PARSE_PROCEED;
-
-   /* Store transitive attribute to the end of attr->transit. */
-   if (!attr->ls_transit)
-      attr->ls_transit = XCALLOC(MTYPE_TRANSIT, sizeof(struct transit));
-
-   transit = attr->ls_transit;
-
-   if (transit->val)
-      transit->val = XREALLOC(MTYPE_TRANSIT_VAL, transit->val,
-               transit->length + total);
-   else
-      transit->val = XMALLOC(MTYPE_TRANSIT_VAL, total);
-
-   memcpy(transit->val + transit->length, startp, total);
-   transit->length += total;
-
-   return BGP_ATTR_PARSE_PROCEED;
-}
-
 /* BGP unknown attribute treatment. */
 static bgp_attr_parse_ret_t bgp_attr_unknown(struct bgp_attr_parser_args *args)
 {
@@ -2947,7 +2849,8 @@ static int bgp_attr_check(struct peer *peer, struct attr *attr)
 		type = BGP_ATTR_NEXT_HOP;
 
 	if (peer->sort == BGP_PEER_IBGP
-	    && !CHECK_FLAG(attr->flag, ATTR_FLAG_BIT(BGP_ATTR_LOCAL_PREF)))
+	    && !CHECK_FLAG(attr->flag, ATTR_FLAG_BIT(BGP_ATTR_LOCAL_PREF))
+       && !CHECK_FLAG(attr->flag, ATTR_FLAG_BIT(BGP_ATTR_LS)))
 		type = BGP_ATTR_LOCAL_PREF;
 
 	if (type) {
@@ -3201,8 +3104,7 @@ bgp_attr_parse_ret_t bgp_attr_parse(struct peer *peer, struct attr *attr,
 			ret = bgp_attr_pmsi_tunnel(&attr_args);
 			break;
 		case BGP_ATTR_LS:
-			//ret = bgp_attr_ls_parse(&attr_args);
-         ret = bgp_attr_ls_transit(&attr_args);
+			ret = bgp_attr_ls_parse(&attr_args);
 			break;
 		default:
 			ret = bgp_attr_unknown(&attr_args);
@@ -3340,8 +3242,6 @@ done:
 		/* Finally intern unknown attribute. */
 		if (attr->transit)
 			attr->transit = transit_intern(attr->transit);
-      if (attr->ls_transit)
-         attr->transit = ls_transit_intern(attr->ls_transit);
 		if (attr->encap_subtlvs)
 			attr->encap_subtlvs = encap_intern(attr->encap_subtlvs,
 							   ENCAP_SUBTLV_TYPE);
@@ -3355,10 +3255,6 @@ done:
 			transit_free(attr->transit);
 			attr->transit = NULL;
 		}
-      if (attr->ls_transit) {
-         transit_free(attr->ls_transit);
-         attr->ls_transit = NULL;
-      }
 
 		bgp_attr_flush_encap(attr);
 	};
@@ -3366,8 +3262,6 @@ done:
 	/* Sanity checks */
 	if (attr->transit)
 		assert(attr->transit->refcnt > 0);
-   if (attr->ls_transit)
-      assert(attr->ls_transit->refcnt > 0);
 	if (attr->encap_subtlvs)
 		assert(attr->encap_subtlvs->refcnt > 0);
 #if ENABLE_BGP_VNC
@@ -3438,6 +3332,8 @@ size_t bgp_packet_mpattr_start(struct stream *s, struct peer *peer, afi_t afi,
 	    && (safi == SAFI_UNICAST || safi == SAFI_LABELED_UNICAST
 		|| safi == SAFI_MPLS_VPN || safi == SAFI_MULTICAST))
 		nh_afi = peer_cap_enhe(peer, afi, safi) ? AFI_IP6 : AFI_IP;
+   else if (afi == AFI_BGP_LS)
+      nh_afi = AFI_IP;
 	else if (safi == SAFI_FLOWSPEC)
 		nh_afi = afi;
 	else
@@ -3451,6 +3347,8 @@ size_t bgp_packet_mpattr_start(struct stream *s, struct peer *peer, afi_t afi,
 		case SAFI_UNICAST:
 		case SAFI_MULTICAST:
 		case SAFI_LABELED_UNICAST:
+      case SAFI_BGP_LS:
+      case SAFI_BGP_LS_SPF:
 			stream_putc(s, 4);
 			stream_put_ipv4(s, attr->nexthop.s_addr);
 			break;
@@ -3705,7 +3603,7 @@ static int bgp_append_local_as(struct peer *peer, afi_t afi, safi_t safi)
 	return 0;
 }
 
-void bgp_packet_mpattr_bgp_ls_node_nlri(struct stream *s, struct attr *attr)
+void bgp_packet_mpattr_bgp_ls_node_nlri(struct stream *s, struct bgp_ls_node *node)
 {
 	size_t tlv_len_pos;
 	/* Local node desc */
@@ -3714,16 +3612,16 @@ void bgp_packet_mpattr_bgp_ls_node_nlri(struct stream *s, struct attr *attr)
 	/* Marker for length */
 	stream_putw(s, 0);
 
-	if (attr->ls_nlri.local.flag & ATTR_FLAG_BIT(LS_NODE_BGP_RID_BIT)) {
+	if (node->local.flag & ATTR_FLAG_BIT(LS_NODE_BGP_RID_BIT)) {
 		stream_putw(s, LS_NODE_BGP_ROUTER_ID);
 		stream_putw(s, BGP_LS_ROUTER_ID_LEN);
-		stream_putl(s, attr->ls_nlri.local.bgp_router_id);
+		stream_putl(s, node->local.bgp_router_id);
 	}
 
-	if (attr->ls_nlri.local.flag & ATTR_FLAG_BIT(LS_NODE_AS_BIT)) {
+	if (node->local.flag & ATTR_FLAG_BIT(LS_NODE_AS_BIT)) {
 		stream_putw(s, LS_NODE_AS);
 		stream_putw(s, BGP_LS_AS_LEN);
-		stream_putl(s, attr->ls_nlri.local.as);
+		stream_putl(s, node->local.as);
 	}
 
 	/* Set node nlri length. Don't count the (2) bytes used to encode
@@ -3731,7 +3629,7 @@ void bgp_packet_mpattr_bgp_ls_node_nlri(struct stream *s, struct attr *attr)
 	stream_putw_at(s, tlv_len_pos, (stream_get_endp(s) - tlv_len_pos) - 2);
 }
 
-void bgp_packet_mpattr_bgp_ls_link_nlri(struct stream *s, struct attr *attr)
+void bgp_packet_mpattr_bgp_ls_link_nlri(struct stream *s, struct bgp_ls_link *link)
 {
 	size_t tlv_len_pos;
 	/* 
@@ -3742,16 +3640,16 @@ void bgp_packet_mpattr_bgp_ls_link_nlri(struct stream *s, struct attr *attr)
 	/* Marker for length */
 	stream_putw(s, 0);
 
-	if (attr->ls_nlri.local.flag & ATTR_FLAG_BIT(LS_NODE_BGP_RID_BIT)) {
+	if (link->local.flag & ATTR_FLAG_BIT(LS_NODE_BGP_RID_BIT)) {
 		stream_putw(s, LS_NODE_BGP_ROUTER_ID);
 		stream_putw(s, BGP_LS_ROUTER_ID_LEN);
-		stream_putl(s, attr->ls_nlri.local.bgp_router_id);
+		stream_putl(s, link->local.bgp_router_id);
 	}
 
-	if (attr->ls_nlri.local.flag & ATTR_FLAG_BIT(LS_NODE_AS_BIT)) {
+	if (link->local.flag & ATTR_FLAG_BIT(LS_NODE_AS_BIT)) {
 		stream_putw(s, LS_NODE_AS);
 		stream_putw(s, BGP_LS_AS_LEN);
-		stream_putl(s, attr->ls_nlri.local.as);
+		stream_putl(s, link->local.as);
 	}
 
 	/* Set node nlri length. Don't count the (2) bytes used to encode
@@ -3766,16 +3664,16 @@ void bgp_packet_mpattr_bgp_ls_link_nlri(struct stream *s, struct attr *attr)
 	/* Marker for length */
 	stream_putw(s, 0);
 
-	if (attr->ls_nlri.remote.flag & ATTR_FLAG_BIT(LS_NODE_BGP_RID_BIT)) {
+	if (link->remote.flag & ATTR_FLAG_BIT(LS_NODE_BGP_RID_BIT)) {
 		stream_putw(s, LS_NODE_BGP_ROUTER_ID);
 		stream_putw(s, BGP_LS_ROUTER_ID_LEN);
-		stream_putl(s, attr->ls_nlri.remote.bgp_router_id);
+		stream_putl(s, link->remote.bgp_router_id);
 	}
 
-	if (attr->ls_nlri.remote.flag & ATTR_FLAG_BIT(LS_NODE_AS_BIT)) {
+	if (link->remote.flag & ATTR_FLAG_BIT(LS_NODE_AS_BIT)) {
 		stream_putw(s, LS_NODE_AS);
 		stream_putw(s, BGP_LS_AS_LEN);
-		stream_putl(s, attr->ls_nlri.remote.as);
+		stream_putl(s, link->remote.as);
 	}
 
 	/* Set node nlri length. Don't count the (2) bytes used to encode
@@ -3785,42 +3683,42 @@ void bgp_packet_mpattr_bgp_ls_link_nlri(struct stream *s, struct attr *attr)
 	/*
 	 * Link descriptor TLVs
 	 */
-	if (attr->ls_nlri.link.flag & ATTR_FLAG_BIT(LS_LINK_LOCAL_IPV4_BIT)) {
+	if (link->link.flag & ATTR_FLAG_BIT(LS_LINK_LOCAL_IPV4_BIT)) {
 		stream_putw(s, LS_LINK_LOCAL_IPV4);
 		stream_putw(s, 4);
-		stream_putl(s, attr->ls_nlri.link.link_local_ipv4.s_addr);
+		stream_putl(s, link->link.link_local_ipv4.s_addr);
 	}
 
-	if (attr->ls_nlri.link.flag & ATTR_FLAG_BIT(LS_LINK_REMOTE_IPV4_BIT)) {
+	if (link->link.flag & ATTR_FLAG_BIT(LS_LINK_REMOTE_IPV4_BIT)) {
 		stream_putw(s, LS_LINK_REMOTE_IPV4);
 		stream_putw(s, 4);
-		stream_putl(s, attr->ls_nlri.link.link_remote_ipv4.s_addr);
+		stream_putl(s, link->link.link_remote_ipv4.s_addr);
 	}
 
-	if (attr->ls_nlri.link.flag & ATTR_FLAG_BIT(LS_LINK_LOCAL_ID_BIT)) {
+	if (link->link.flag & ATTR_FLAG_BIT(LS_LINK_LOCAL_ID_BIT)) {
 		stream_putw(s, LS_LINK_LOCAL_REMOTE_ID);
 		stream_putw(s, 8);
-		stream_putl(s, attr->ls_nlri.link.link_localid);
-		stream_putl(s, attr->ls_nlri.link.link_remoteid);
+		stream_putl(s, link->link.link_localid);
+		stream_putl(s, link->link.link_remoteid);
 	}
 
-	if (attr->ls_nlri.link.flag & ATTR_FLAG_BIT(LS_LINK_LOCAL_IPV6_BIT)) {
+	if (link->link.flag & ATTR_FLAG_BIT(LS_LINK_LOCAL_IPV6_BIT)) {
 		stream_putw(s, LS_LINK_LOCAL_IPV6);
 		stream_putw(s, 4);
-		stream_put(s, attr->ls_nlri.link.link_local_ipv6.s6_addr, 16);
+		stream_put(s, link->link.link_local_ipv6.s6_addr, 16);
 	}
 
-	if (attr->ls_nlri.link.flag & ATTR_FLAG_BIT(LS_LINK_REMOTE_IPV6_BIT)) {
+	if (link->link.flag & ATTR_FLAG_BIT(LS_LINK_REMOTE_IPV6_BIT)) {
 		stream_putw(s, LS_LINK_REMOTE_IPV6);
 		stream_putw(s, 4);
-		stream_put(s, attr->ls_nlri.link.link_remote_ipv6.s6_addr, 16);
+		stream_put(s, link->link.link_remote_ipv6.s6_addr, 16);
 	}
 
 	//TODO Basil Link IGP Metric
 
 }
 
-void bgp_packet_mpattr_bgp_ls_prefix_nlri(struct stream *s, struct attr *attr)
+void bgp_packet_mpattr_bgp_ls_prefix_nlri(struct stream *s, struct bgp_ls_prefix *p)
 {
 	size_t tlv_len_pos;
 	/* 
@@ -3831,16 +3729,16 @@ void bgp_packet_mpattr_bgp_ls_prefix_nlri(struct stream *s, struct attr *attr)
 	/* Marker for length */
 	stream_putw(s, 0);
 
-	if (attr->ls_nlri.local.flag & ATTR_FLAG_BIT(LS_NODE_BGP_RID_BIT)) {
+	if (p->local.flag & ATTR_FLAG_BIT(LS_NODE_BGP_RID_BIT)) {
 		stream_putw(s, LS_NODE_BGP_ROUTER_ID);
 		stream_putw(s, BGP_LS_ROUTER_ID_LEN);
-		stream_putl(s, attr->ls_nlri.local.bgp_router_id);
+		stream_putl(s, p->local.bgp_router_id);
 	}
 
-	if (attr->ls_nlri.local.flag & ATTR_FLAG_BIT(LS_NODE_AS_BIT)) {
+	if (p->local.flag & ATTR_FLAG_BIT(LS_NODE_AS_BIT)) {
 		stream_putw(s, LS_NODE_AS);
 		stream_putw(s, BGP_LS_AS_LEN);
-		stream_putl(s, attr->ls_nlri.local.as);
+		stream_putl(s, p->local.as);
 	}
 
 	/* Set node nlri length. Don't count the (2) bytes used to encode
@@ -3850,54 +3748,61 @@ void bgp_packet_mpattr_bgp_ls_prefix_nlri(struct stream *s, struct attr *attr)
 	/*
 	 * Prefix desc
 	 */
-	if (attr->ls_nlri.prefix.flag & ATTR_FLAG_BIT(LS_PREFIX_BIT)) {
+	if (p->prefix.flag & ATTR_FLAG_BIT(LS_PREFIX_BIT)) {
 		stream_putw(s, LS_PREFIX_IP_REACH);
-		stream_putc(s, PSIZE(attr->ls_nlri.prefix.p.prefixlen));
-		stream_put(s, attr->ls_nlri.prefix.p.u.val, PSIZE(attr->ls_nlri.prefix.p.prefixlen));
+		stream_putc(s, PSIZE(p->prefix.p.prefixlen));
+		stream_put(s, p->prefix.p.val, PSIZE(p->prefix.p.prefixlen));
 	}
 }
 
 
 void bgp_packet_mpattr_bgp_ls(struct stream *s, afi_t afi, safi_t safi,
-				struct attr *attr) {
+				struct prefix_bgp_ls *p) {
 	size_t nlri_len_pos;
+   struct bgp_ls_node *node;
+   struct bgp_ls_link *link;
+   struct bgp_ls_prefix *prefix;
 
 	if (safi == SAFI_BGP_LS_SPF) {
-		switch (attr->ls_nlri.type) {
+		switch (p->prefix.ls_type) {
 			case LINK_STATE_NODE_NLRI:
+            node = &(p->prefix.ls_node);
 				stream_putw(s, LINK_STATE_NODE_NLRI);
 				nlri_len_pos = stream_get_endp(s);
 				stream_putw(s, 0);
-				stream_putc(s, attr->ls_nlri.ls_hdr.protocol_id);
-				stream_putq(s, attr->ls_nlri.ls_hdr.identifier);
-				bgp_packet_mpattr_bgp_ls_node_nlri(s, attr);
+				stream_putc(s, node->ls_hdr.protocol_id);
+				stream_putq(s, node->ls_hdr.identifier);
+				bgp_packet_mpattr_bgp_ls_node_nlri(s, node);
 				stream_putw_at(s, nlri_len_pos, (stream_get_endp(s) - nlri_len_pos) - 2);
 				break;
 			case LINK_STATE_LINK_NLRI:
+            link = &(p->prefix.ls_link);
 				stream_putw(s, LINK_STATE_LINK_NLRI);
 				nlri_len_pos = stream_get_endp(s);
 				stream_putw(s, 0);
-				stream_putc(s, attr->ls_nlri.ls_hdr.protocol_id);
-				stream_putq(s, attr->ls_nlri.ls_hdr.identifier);
-				bgp_packet_mpattr_bgp_ls_link_nlri(s, attr);
+				stream_putc(s, link->ls_hdr.protocol_id);
+				stream_putq(s, link->ls_hdr.identifier);
+				bgp_packet_mpattr_bgp_ls_link_nlri(s, link);
 				stream_putw_at(s, nlri_len_pos, (stream_get_endp(s) - nlri_len_pos) - 2);
 				break;
 			case LINK_STATE_PREFIX4_NLRI:
+            prefix = &(p->prefix.ls_pfx);
 				stream_putw(s, LINK_STATE_PREFIX4_NLRI);
 				nlri_len_pos = stream_get_endp(s);
 				stream_putw(s, 0);
-				stream_putc(s, attr->ls_nlri.ls_hdr.protocol_id);
-				stream_putq(s, attr->ls_nlri.ls_hdr.identifier);
-				bgp_packet_mpattr_bgp_ls_prefix_nlri(s, attr);
+				stream_putc(s, prefix->ls_hdr.protocol_id);
+				stream_putq(s, prefix->ls_hdr.identifier);
+				bgp_packet_mpattr_bgp_ls_prefix_nlri(s, prefix);
 				stream_putw_at(s, nlri_len_pos, (stream_get_endp(s) - nlri_len_pos) - 2);
 				break;
 			case LINK_STATE_PREFIX6_NLRI:
+            prefix = &(p->prefix.ls_pfx);
 				stream_putw(s, LINK_STATE_PREFIX6_NLRI);
 				nlri_len_pos = stream_get_endp(s);
 				stream_putw(s, 0);
-				stream_putc(s, attr->ls_nlri.ls_hdr.protocol_id);
-				stream_putq(s, attr->ls_nlri.ls_hdr.identifier);
-				bgp_packet_mpattr_bgp_ls_prefix_nlri(s, attr);
+            stream_putc(s, prefix->ls_hdr.protocol_id);
+            stream_putq(s, prefix->ls_hdr.identifier);
+            bgp_packet_mpattr_bgp_ls_prefix_nlri(s, prefix);
 				stream_putw_at(s, nlri_len_pos, (stream_get_endp(s) - nlri_len_pos) - 2);
 				break;
 		}
@@ -3958,12 +3863,12 @@ void bgp_packet_lsattr_prefix(struct stream *s, struct attr *attr)
 	if (attr->ls_attr.flag & ATTR_FLAG_BIT(LS_PREFIX_ATTR_SEQ_PRESENT)) {
 		stream_putw(s, LS_PREFIX_ATTR_SEQ);
 		stream_putw(s, 8);
-		stream_putl(s, attr->ls_attr.prefix_seq_high);
-		stream_putl(s, attr->ls_attr.prefix_seq_low);
+		stream_putq(s, attr->ls_attr.prefix_seq);
 	}
 }
 
-void bgp_packet_lsattr(struct stream *s, afi_t afi, safi_t safi, struct attr *attr)
+void bgp_packet_lsattr(struct stream *s, afi_t afi, safi_t safi, 
+                       struct attr *attr)
 {
 	size_t sizep;
 
@@ -3973,21 +3878,10 @@ void bgp_packet_lsattr(struct stream *s, afi_t afi, safi_t safi, struct attr *at
 	sizep = stream_get_endp(s);
 	stream_putw(s, 0); /* Marker: Attribute length. */
 
-	switch (attr->ls_nlri.type) {
-		case LINK_STATE_NODE_NLRI:
-			bgp_packet_lsattr_node(s, attr);
-			stream_putw_at(s, sizep, (stream_get_endp(s) - sizep) - 2);
-			break;
-		case LINK_STATE_LINK_NLRI:
-			bgp_packet_lsattr_link(s, attr);
-			stream_putw_at(s, sizep, (stream_get_endp(s) - sizep) - 2);
-			break;
-		case LINK_STATE_PREFIX4_NLRI:
-		case LINK_STATE_PREFIX6_NLRI:
-			bgp_packet_lsattr_prefix(s, attr);
-			stream_putw_at(s, sizep, (stream_get_endp(s) - sizep) - 2);
-			break;
-	}
+   bgp_packet_lsattr_node(s, attr);
+   bgp_packet_lsattr_link(s, attr);
+   bgp_packet_lsattr_prefix(s, attr);
+   stream_putw_at(s, sizep, (stream_get_endp(s) - sizep) - 2);
 }
 
 /* Make attribute packet. */
@@ -4020,7 +3914,7 @@ bgp_size_t bgp_packet_attribute(struct bgp *bgp, struct peer *peer,
 		mpattrlen_pos = bgp_packet_mpattr_start(s, peer, afi, safi,
 							vecarr, attr);
 		if (afi == AFI_BGP_LS) {
-			bgp_packet_mpattr_bgp_ls(s, afi, safi, attr);
+			bgp_packet_mpattr_bgp_ls(s, afi, safi, p);
 		} else {
 			bgp_packet_mpattr_prefix(s, afi, safi, p, prd, label,
 						 num_labels, addpath_encode,
@@ -4028,10 +3922,6 @@ bgp_size_t bgp_packet_attribute(struct bgp *bgp, struct peer *peer,
 		}
 		bgp_packet_mpattr_end(s, mpattrlen_pos);
 
-		/* Add LS attribute TLV */
-		if (afi == AFI_BGP_LS) {
-			bgp_packet_lsattr(s, afi, safi, attr);
-		}
 	}
 
 	/* Origin attribute. */
@@ -4470,6 +4360,11 @@ bgp_size_t bgp_packet_attribute(struct bgp *bgp, struct peer *peer,
 		// Unicast tunnel endpoint IP address
 	}
 
+   /* Add LS attribute TLV */
+   if (afi == AFI_BGP_LS && attr->flag & ATTR_FLAG_BIT(BGP_ATTR_LS)) {
+      bgp_packet_lsattr(s, afi, safi, attr);
+   }
+
 	/* Unknown transit attribute. */
 	if (attr->transit)
 		stream_put(s, attr->transit->val, attr->transit->length);
@@ -4534,7 +4429,6 @@ void bgp_attr_init(void)
 	transit_init();
 	encap_init();
 	srv6_init();
-   ls_transit_init();
 }
 
 void bgp_attr_finish(void)
@@ -4548,7 +4442,6 @@ void bgp_attr_finish(void)
 	transit_finish();
 	encap_finish();
 	srv6_finish();
-   ls_transit_finish();
 }
 
 /* Make attribute packet. */

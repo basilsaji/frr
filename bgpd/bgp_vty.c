@@ -8583,9 +8583,6 @@ DEFUN (show_bgp_memory,
 	if ((count = attr_unknown_count()))
 		vty_out(vty, "%ld unknown attributes\n", count);
 
-   if ((count = ls_attr_transit_count()))
-      vty_out(vty, "%ld LS attributes\n", count);
-
 	/* AS_PATH attributes */
 	count = aspath_count();
 	vty_out(vty, "%ld BGP AS-PATH entries, using %s of memory\n", count,
@@ -16157,6 +16154,8 @@ void bgp_vty_init(void)
 			&no_neighbor_route_reflector_client_cmd);
 	install_element(BGP_EVPN_NODE, &neighbor_route_reflector_client_cmd);
 	install_element(BGP_EVPN_NODE, &no_neighbor_route_reflector_client_cmd);
+   install_element(BGP_LS_SPF_NODE, &neighbor_route_reflector_client_cmd);
+   install_element(BGP_LS_SPF_NODE, &no_neighbor_route_reflector_client_cmd);
 
 	/* "neighbor route-server" commands.*/
 	install_element(BGP_NODE, &neighbor_route_server_client_hidden_cmd);

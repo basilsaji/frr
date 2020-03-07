@@ -147,9 +147,116 @@ struct evpn_addr {
 #define AF_FLOWSPEC (AF_MAX + 2)
 #endif
 
+#if !defined(AF_BGP_LS)
+#define AF_BGP_LS (AF_MAX + 3)
+#endif
+
 struct flowspec_prefix {
 	uint16_t prefixlen; /* length in bytes */
 	uintptr_t ptr;
+};
+
+typedef struct {
+   /* Length of the IGP Router ID
+    * 4 - OSPFv2/OSPFv3 non pseudo node
+    * 8 - OSPFv2/OSPFv3 pseudo node
+    * 6 - ISIS non pseudo node
+    * 7 - ISIS pseudo node
+    */
+   uint8_t  len;
+   uint8_t val[8];
+} bgp_ls_igp_router_id;
+
+struct bgp_ls_header {
+   /* BGP LS protocol id */
+   uint16_t protocol_id;
+
+   /* BGP LS identifier */
+   uint16_t identifier;
+};
+
+struct bgp_ls_nodedesc {
+   /* BGP LS nlri flags to set which values are set */
+   uint64_t flag;
+
+   /* BGP LS local node desc bgp router id */
+   uint32_t bgp_router_id;
+
+   /* BGP LS local node desc as */
+   uint32_t as;
+
+   /* BGP LS IGP Router ID */
+   bgp_ls_igp_router_id igp_router_id;
+
+   /* BGP LS Identifier */
+   uint32_t ls_id;
+};
+
+struct bgp_ls_linkdesc {
+   /* BGP LS nlri flags to set which values are set */
+   uint64_t flag;
+
+   /* BGP LS Local link IPv4 address */
+   struct in_addr link_local_ipv4;
+
+   /* BGP LS Remote link IPv4 address */
+   struct in_addr link_remote_ipv4;
+
+   /* BGP LS Local id */
+   uint32_t link_localid;
+
+   /* BGP LS Remote id */
+   uint32_t link_remoteid;
+
+   /* BGP LS Local link IPv6 address */
+   struct in6_addr link_local_ipv6;
+
+   /* BGP LS Remote link IPv6 address */
+   struct in6_addr link_remote_ipv6;
+};
+
+struct prefix_gen {
+   uint8_t family;
+   uint8_t prefixlen;
+   uint8_t val[16];
+};
+
+struct bgp_ls_prefixdesc {
+   /* BGP LS nlri flags to set which values are set */
+   uint64_t flag;
+
+   /* BGP LS IP Reach prefix */
+   struct prefix_gen p;
+};
+
+struct bgp_ls_node {
+   struct bgp_ls_header ls_hdr;
+   struct bgp_ls_nodedesc local;
+};
+
+struct bgp_ls_link {
+   struct bgp_ls_header ls_hdr;
+   struct bgp_ls_nodedesc local;
+   struct bgp_ls_nodedesc remote;
+   struct bgp_ls_linkdesc link;
+};
+
+struct bgp_ls_prefix {
+   struct bgp_ls_header ls_hdr;
+   struct bgp_ls_nodedesc local;
+   struct bgp_ls_prefixdesc prefix;
+};
+
+struct bgp_ls_addr {
+   uint8_t ls_type;
+   union {
+      struct bgp_ls_node _ls_node;
+      struct bgp_ls_link _ls_link;
+      struct bgp_ls_prefix _ls_prefix;
+   } u;
+#define ls_node u._ls_node
+#define ls_link u._ls_link
+#define ls_pfx u._ls_prefix
 };
 
 /* FRR generic prefix structure. */
@@ -170,21 +277,22 @@ struct prefix {
 		uintptr_t ptr;
 		struct evpn_addr prefix_evpn; /* AF_EVPN */
 		struct flowspec_prefix prefix_flowspec; /* AF_FLOWSPEC */
+      struct bgp_ls_addr prefix_bgpls;
 	} u __attribute__((aligned(8)));
 };
 
 /* IPv4 prefix structure. */
 struct prefix_ipv4 {
-	uint8_t family;
-	uint16_t prefixlen;
-	struct in_addr prefix __attribute__((aligned(8)));
+   uint8_t family;
+   uint16_t prefixlen;
+   struct in_addr prefix __attribute__((aligned(8)));
 };
 
 /* IPv6 prefix structure. */
 struct prefix_ipv6 {
-	uint8_t family;
-	uint16_t prefixlen;
-	struct in6_addr prefix __attribute__((aligned(8)));
+   uint8_t family;
+   uint16_t prefixlen;
+   struct in6_addr prefix __attribute__((aligned(8)));
 };
 
 struct prefix_ls {
@@ -213,6 +321,13 @@ struct prefix_evpn {
 	uint8_t family;
 	uint16_t prefixlen;
 	struct evpn_addr prefix __attribute__((aligned(8)));
+};
+
+
+struct prefix_bgp_ls {
+   uint8_t family;
+   uint16_t prefixlen;
+   struct bgp_ls_addr prefix __attribute__((aligned(8)));
 };
 
 static inline int is_evpn_prefix_ipaddr_none(const struct prefix_evpn *evp)
@@ -295,6 +410,7 @@ union prefixptr {
 	prefixtype(prefixptr, struct prefix_ipv6, p6)
 	prefixtype(prefixptr, struct prefix_evpn, evp)
 	prefixtype(prefixptr, struct prefix_fs,   fs)
+   prefixtype(prefixptr, struct prefix_bgp_ls, bls)
 } __attribute__((transparent_union));
 
 union prefixconstptr {
@@ -303,6 +419,7 @@ union prefixconstptr {
 	prefixtype(prefixconstptr, const struct prefix_ipv6, p6)
 	prefixtype(prefixconstptr, const struct prefix_evpn, evp)
 	prefixtype(prefixconstptr, const struct prefix_fs,   fs)
+   prefixtype(prefixconstptr, const struct prefix_bgp_ls, bls)
 } __attribute__((transparent_union));
 
 #ifndef INET_ADDRSTRLEN

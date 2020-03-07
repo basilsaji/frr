@@ -862,10 +862,14 @@ struct bpacket *subgroup_update_packet(struct update_subgroup *subgrp)
 					snlri, peer, afi, safi, &vecarr,
 					adv->baa->attr);
 
-			bgp_packet_mpattr_prefix(snlri, afi, safi, &rn->p, prd,
-						 label_pnt, num_labels,
-						 addpath_encode, addpath_tx_id,
-						 adv->baa->attr);
+         if (afi == AFI_BGP_LS) {
+            bgp_packet_mpattr_bgp_ls(s, afi, safi, &rn->p);
+         } else {
+            bgp_packet_mpattr_prefix(snlri, afi, safi, &rn->p, prd,
+                      label_pnt, num_labels,
+                      addpath_encode, addpath_tx_id,
+                      adv->baa->attr);
+         }
 		}
 
 		num_pfx++;

@@ -44,7 +44,7 @@
 #include "bgpd/bgp_memory.h"
 #include "bgpd/bgp_ls.h"
 
-int bgp_nlri_parse_ls_node_local_desc(struct peer *peer, struct attr *attr,
+int bgp_nlri_parse_ls_node_local_desc(struct peer *peer, struct ls_nlri *nlri,
 			 uint8_t *data, uint16_t length)
 {
 	uint16_t type;
@@ -73,25 +73,25 @@ int bgp_nlri_parse_ls_node_local_desc(struct peer *peer, struct attr *attr,
 
 		switch(type) {
 			case LS_NODE_BGP_ROUTER_ID:
-				attr->ls_nlri.local.bgp_router_id = ntohl(*(uint32_t *)(pnt + BGP_LS_TLV_HEADER_LEN));
-				attr->ls_nlri.local.flag |= ATTR_FLAG_BIT(LS_NODE_BGP_RID_BIT);
-				zlog_debug("NODE LOCAL DESC: BGP ROUTER ID: %u",  attr->ls_nlri.local.bgp_router_id);
+				nlri->local.bgp_router_id = ntohl(*(uint32_t *)(pnt + BGP_LS_TLV_HEADER_LEN));
+				nlri->local.flag |= ATTR_FLAG_BIT(LS_NODE_BGP_RID_BIT);
+				zlog_debug("NODE LOCAL DESC: BGP ROUTER ID: %u",  nlri->local.bgp_router_id);
 				break;
 			case LS_NODE_BGP_LS_ID:
-				attr->ls_nlri.local.ls_id = ntohl(*(uint32_t *)(pnt + BGP_LS_TLV_HEADER_LEN));
-				attr->ls_nlri.local.flag |= ATTR_FLAG_BIT(LS_NODE_BGP_LS_ID_BIT);
-				zlog_debug("NODE LOCAL DESC: BGP LS ID: %u",  attr->ls_nlri.local.ls_id);
+				nlri->local.ls_id = ntohl(*(uint32_t *)(pnt + BGP_LS_TLV_HEADER_LEN));
+				nlri->local.flag |= ATTR_FLAG_BIT(LS_NODE_BGP_LS_ID_BIT);
+				zlog_debug("NODE LOCAL DESC: BGP LS ID: %u",  nlri->local.ls_id);
 				break;
 			case LS_NODE_IGP_ROUTER_ID:
-				memcpy(&attr->ls_nlri.local.igp_router_id.val, pnt + BGP_LS_TLV_HEADER_LEN, len);
-				attr->ls_nlri.local.igp_router_id.len = len;
-				attr->ls_nlri.local.flag |= ATTR_FLAG_BIT(LS_NODE_IGP_RID_BIT);
+				memcpy(&nlri->local.igp_router_id.val, pnt + BGP_LS_TLV_HEADER_LEN, len);
+				nlri->local.igp_router_id.len = len;
+				nlri->local.flag |= ATTR_FLAG_BIT(LS_NODE_IGP_RID_BIT);
 				zlog_debug("NODE LOCAL DESC: IGP ROUTER ID");
 				break;
 			case LS_NODE_AS:
-				attr->ls_nlri.local.as = ntohl(*(uint32_t *)(pnt + BGP_LS_TLV_HEADER_LEN));
-				attr->ls_nlri.local.flag |= ATTR_FLAG_BIT(LS_NODE_AS_BIT);
-				zlog_debug("NODE LOCAL DESC: LOCAL AS: %u",  attr->ls_nlri.local.as);
+				nlri->local.as = ntohl(*(uint32_t *)(pnt + BGP_LS_TLV_HEADER_LEN));
+				nlri->local.flag |= ATTR_FLAG_BIT(LS_NODE_AS_BIT);
+				zlog_debug("NODE LOCAL DESC: LOCAL AS: %u",  nlri->local.as);
 				break;
 			default:
 				return BGP_NLRI_PARSE_ERROR;
@@ -101,7 +101,7 @@ int bgp_nlri_parse_ls_node_local_desc(struct peer *peer, struct attr *attr,
 	return 0;
 }
 
-int bgp_nlri_parse_ls_node_remote_desc(struct peer *peer, struct attr *attr,
+int bgp_nlri_parse_ls_node_remote_desc(struct peer *peer, struct ls_nlri *nlri,
 			 uint8_t *data, uint16_t length)
 {
 	uint16_t type;
@@ -129,25 +129,25 @@ int bgp_nlri_parse_ls_node_remote_desc(struct peer *peer, struct attr *attr,
 
 		switch(type) {
 			case LS_NODE_BGP_ROUTER_ID:
-				attr->ls_nlri.remote.bgp_router_id = ntohl(*(uint32_t *)(pnt + BGP_LS_TLV_HEADER_LEN));
-				attr->ls_nlri.remote.flag |= ATTR_FLAG_BIT(LS_NODE_BGP_RID_BIT);
-				zlog_debug("NODE REMOTE DESC: BGP ROUTER ID: %u",  attr->ls_nlri.remote.bgp_router_id);
+				nlri->remote.bgp_router_id = ntohl(*(uint32_t *)(pnt + BGP_LS_TLV_HEADER_LEN));
+				nlri->remote.flag |= ATTR_FLAG_BIT(LS_NODE_BGP_RID_BIT);
+				zlog_debug("NODE REMOTE DESC: BGP ROUTER ID: %u",  nlri->remote.bgp_router_id);
 				break;
          case LS_NODE_BGP_LS_ID:
-            attr->ls_nlri.remote.ls_id = ntohl(*(uint32_t *)(pnt + BGP_LS_TLV_HEADER_LEN));
-            attr->ls_nlri.remote.flag |= ATTR_FLAG_BIT(LS_NODE_BGP_LS_ID_BIT);
-            zlog_debug("NODE LOCAL DESC: BGP LS ID: %u",  attr->ls_nlri.remote.ls_id);
+            nlri->remote.ls_id = ntohl(*(uint32_t *)(pnt + BGP_LS_TLV_HEADER_LEN));
+            nlri->remote.flag |= ATTR_FLAG_BIT(LS_NODE_BGP_LS_ID_BIT);
+            zlog_debug("NODE LOCAL DESC: BGP LS ID: %u",  nlri->remote.ls_id);
             break;
          case LS_NODE_IGP_ROUTER_ID:
-            memcpy(&attr->ls_nlri.remote.igp_router_id.val, pnt + BGP_LS_TLV_HEADER_LEN, len);
-            attr->ls_nlri.remote.igp_router_id.len = len;
-            attr->ls_nlri.remote.flag |= ATTR_FLAG_BIT(LS_NODE_IGP_RID_BIT);
+            memcpy(&nlri->remote.igp_router_id.val, pnt + BGP_LS_TLV_HEADER_LEN, len);
+            nlri->remote.igp_router_id.len = len;
+            nlri->remote.flag |= ATTR_FLAG_BIT(LS_NODE_IGP_RID_BIT);
             zlog_debug("NODE LOCAL DESC: IGP ROUTER ID");
             break;
 			case LS_NODE_AS:
-				attr->ls_nlri.remote.as = ntohl(*(uint32_t *)(pnt + BGP_LS_TLV_HEADER_LEN));
-				attr->ls_nlri.remote.flag |= ATTR_FLAG_BIT(LS_NODE_AS_BIT);
-				zlog_debug("NODE REMOTE DESC: REMOTE AS: %u",  attr->ls_nlri.remote.as);
+				nlri->remote.as = ntohl(*(uint32_t *)(pnt + BGP_LS_TLV_HEADER_LEN));
+				nlri->remote.flag |= ATTR_FLAG_BIT(LS_NODE_AS_BIT);
+				zlog_debug("NODE REMOTE DESC: REMOTE AS: %u",  nlri->remote.as);
 				break;
 			default:
 				return BGP_NLRI_PARSE_ERROR;
@@ -156,7 +156,7 @@ int bgp_nlri_parse_ls_node_remote_desc(struct peer *peer, struct attr *attr,
 	return 0;
 }
 
-int bgp_nlri_parse_ls_link_desc(struct peer *peer, struct attr *attr,
+int bgp_nlri_parse_ls_link_desc(struct peer *peer, struct ls_nlri *nlri,
 			uint8_t *data, uint16_t length)
 {
 	uint16_t type;
@@ -183,28 +183,28 @@ int bgp_nlri_parse_ls_link_desc(struct peer *peer, struct attr *attr,
 
 		switch(type) {
 			case LS_LINK_LOCAL_IPV4:
-				attr->ls_nlri.link.link_local_ipv4.s_addr = ntohl(*(uint32_t *)(pnt + BGP_LS_TLV_HEADER_LEN));
-				attr->ls_nlri.link.flag |= ATTR_FLAG_BIT(LS_LINK_LOCAL_IPV4_BIT);
-				zlog_debug("LINK DESC: LOCAL IPv4: %s",  inet_ntoa(attr->ls_nlri.link.link_local_ipv4));
+				nlri->link.link_local_ipv4.s_addr = ntohl(*(uint32_t *)(pnt + BGP_LS_TLV_HEADER_LEN));
+				nlri->link.flag |= ATTR_FLAG_BIT(LS_LINK_LOCAL_IPV4_BIT);
+				zlog_debug("LINK DESC: LOCAL IPv4: %s",  inet_ntoa(nlri->link.link_local_ipv4));
 				break;
 			case LS_LINK_REMOTE_IPV4:
-				attr->ls_nlri.link.link_remote_ipv4.s_addr = ntohl(*(uint32_t *)(pnt + BGP_LS_TLV_HEADER_LEN));
-				attr->ls_nlri.link.flag |= ATTR_FLAG_BIT(LS_LINK_REMOTE_IPV4_BIT);
-				zlog_debug("LINK DESC: REMOTE IPv4: %s",  inet_ntoa(attr->ls_nlri.link.link_remote_ipv4));
+				nlri->link.link_remote_ipv4.s_addr = ntohl(*(uint32_t *)(pnt + BGP_LS_TLV_HEADER_LEN));
+				nlri->link.flag |= ATTR_FLAG_BIT(LS_LINK_REMOTE_IPV4_BIT);
+				zlog_debug("LINK DESC: REMOTE IPv4: %s",  inet_ntoa(nlri->link.link_remote_ipv4));
 				break;
 			case LS_LINK_LOCAL_REMOTE_ID:
-				attr->ls_nlri.link.link_localid = ntohl(*(uint32_t *)(pnt + BGP_LS_TLV_HEADER_LEN));
-				attr->ls_nlri.link.flag |= ATTR_FLAG_BIT(LS_LINK_LOCAL_ID_BIT);
-				attr->ls_nlri.link.link_remoteid = ntohl(*(uint32_t *)(pnt + BGP_LS_TLV_HEADER_LEN + 4));
-				attr->ls_nlri.link.flag |= ATTR_FLAG_BIT(LS_LINK_REMOTE_ID_BIT);
+				nlri->link.link_localid = ntohl(*(uint32_t *)(pnt + BGP_LS_TLV_HEADER_LEN));
+				nlri->link.flag |= ATTR_FLAG_BIT(LS_LINK_LOCAL_ID_BIT);
+				nlri->link.link_remoteid = ntohl(*(uint32_t *)(pnt + BGP_LS_TLV_HEADER_LEN + 4));
+				nlri->link.flag |= ATTR_FLAG_BIT(LS_LINK_REMOTE_ID_BIT);
 				break;
 			case LS_LINK_LOCAL_IPV6:
-				memcpy(&attr->ls_nlri.link.link_local_ipv6, pnt + BGP_LS_TLV_HEADER_LEN, IPV6_MAX_BYTELEN);
-				attr->ls_nlri.link.flag |= ATTR_FLAG_BIT(LS_LINK_LOCAL_IPV6_BIT);
+				memcpy(&nlri->link.link_local_ipv6, pnt + BGP_LS_TLV_HEADER_LEN, IPV6_MAX_BYTELEN);
+				nlri->link.flag |= ATTR_FLAG_BIT(LS_LINK_LOCAL_IPV6_BIT);
 				break;
 			case LS_LINK_REMOTE_IPV6:
-				memcpy(&attr->ls_nlri.link.link_remote_ipv6, pnt + BGP_LS_TLV_HEADER_LEN, IPV6_MAX_BYTELEN);
-				attr->ls_nlri.link.flag |= ATTR_FLAG_BIT(LS_LINK_REMOTE_IPV6_BIT);
+				memcpy(&nlri->link.link_remote_ipv6, pnt + BGP_LS_TLV_HEADER_LEN, IPV6_MAX_BYTELEN);
+				nlri->link.flag |= ATTR_FLAG_BIT(LS_LINK_REMOTE_IPV6_BIT);
 				break;
 			default:
 				return BGP_NLRI_PARSE_ERROR;
@@ -213,8 +213,8 @@ int bgp_nlri_parse_ls_link_desc(struct peer *peer, struct attr *attr,
 	return 0;
 }
 
-int bgp_nlri_parse_ls_prefix_desc(struct peer *peer, struct attr *attr,
-			 uint8_t *data, uint16_t length, uint8_t afi)
+int bgp_nlri_parse_ls_prefix_desc(struct peer *peer, struct ls_nlri *nlri,
+			 uint8_t *data, uint16_t length, afi_t afi)
 {
 	uint16_t type;
 	uint16_t len;
@@ -242,18 +242,17 @@ int bgp_nlri_parse_ls_prefix_desc(struct peer *peer, struct attr *attr,
 
 		switch(type) {
 			case LS_PREFIX_IP_REACH:
-				attr->ls_nlri.prefix.p.prefixlen = *(pnt + BGP_LS_TLV_HEADER_LEN);
-				if ( (afi == AFI_IP) && (attr->ls_nlri.prefix.p.prefixlen > 32) ) {
+				nlri->prefix.p.prefixlen = *(pnt + BGP_LS_TLV_HEADER_LEN);
+				if ( (afi == AFI_IP) && (nlri->prefix.p.prefixlen > 32) ) {
 					flog_err(
 						EC_BGP_UPDATE_RCV,
 						"%s [Error] Update packet error / LS PREFIX4 NLRI TLV Prefix length more than 32",
 						peer->host );
 					return BGP_NLRI_PARSE_ERROR;
 				}
-				attr->ls_nlri.prefix.p.family = afi2family(afi);
-				memcpy(attr->ls_nlri.prefix.p.u.val, pnt + BGP_LS_TLV_HEADER_LEN + 1, len - 1);
-				attr->ls_nlri.prefix.flag |= ATTR_FLAG_BIT(LS_PREFIX_BIT);
-				zlog_debug("PREFIX DESC: IPv4: %s", prefix2str(&(attr->ls_nlri.prefix.p), buf, PREFIX_STRLEN));
+				nlri->prefix.p.family = afi2family(afi);
+				memcpy(nlri->prefix.p.val, pnt + BGP_LS_TLV_HEADER_LEN + 1, len - 1);
+				nlri->prefix.flag |= ATTR_FLAG_BIT(LS_PREFIX_BIT);
 				break;
 			default:
 				return BGP_NLRI_PARSE_ERROR;
@@ -262,7 +261,7 @@ int bgp_nlri_parse_ls_prefix_desc(struct peer *peer, struct attr *attr,
 	return 0;
 }
 
-int bgp_nlri_parse_ls_node(struct peer *peer, struct attr *attr,
+int bgp_nlri_parse_ls_node(struct peer *peer, struct ls_nlri *nlri,
 			 uint8_t *data, uint16_t length)
 {
 	uint8_t protocolid;
@@ -275,8 +274,8 @@ int bgp_nlri_parse_ls_node(struct peer *peer, struct attr *attr,
 
 	protocolid = *(data);
 	id = *((uint64_t *)(data + BGP_LS_NLRI_ID_OFFSET));
-	attr->ls_nlri.ls_hdr.protocol_id = protocolid;
-	attr->ls_nlri.ls_hdr.identifier = id;
+	nlri->ls_hdr.protocol_id = protocolid;
+	nlri->ls_hdr.identifier = id;
 	pnt = data + BGP_LS_NLRI_DATA_MIN_BYTES;
 	lim = data + length;
 
@@ -301,10 +300,39 @@ int bgp_nlri_parse_ls_node(struct peer *peer, struct attr *attr,
 		return BGP_NLRI_PARSE_ERROR_PACKET_OVERFLOW;
 	}
 
-	return bgp_nlri_parse_ls_node_local_desc(peer, attr, tlvdata, tlvdatalen);
+	return bgp_nlri_parse_ls_node_local_desc(peer, nlri, tlvdata, tlvdatalen);
 }
 
-int bgp_nlri_parse_ls_link(struct peer *peer, struct attr *attr,
+int bgp_process_ls_node_nlri(struct peer *peer, afi_t afi, safi_t safi, struct attr *attr,
+                             uint8_t *data, uint16_t length)
+{
+   int error;
+   struct prefix_bgp_ls p;
+   struct ls_nlri nlri;
+
+   memset(&nlri, 0, sizeof(struct ls_nlri));
+   error = bgp_nlri_parse_ls_node(peer, &nlri, data, length);
+   if( error != BGP_NLRI_PARSE_OK ) {
+      return error;
+   }
+
+   memset(&p, 0, sizeof(struct prefix_bgp_ls));
+   p.family = AF_BGP_LS;
+   p.prefix.ls_type = LINK_STATE_NODE_NLRI;
+   p.prefix.ls_node.ls_hdr = nlri.ls_hdr;
+   p.prefix.ls_node.local = nlri.local;
+
+   if(attr)
+      error = bgp_update(peer, (struct prefix *)&p, 0, attr, afi, safi, 
+                       ZEBRA_ROUTE_BGP, BGP_ROUTE_LS, NULL, NULL, 0, 0, NULL);
+   else
+      error = bgp_withdraw(peer, (struct prefix *)&p, 0, attr, afi, safi,
+                         ZEBRA_ROUTE_BGP, BGP_ROUTE_LS, NULL, NULL, 0, NULL);
+
+   return error;
+}
+
+int bgp_nlri_parse_ls_link(struct peer *peer, struct ls_nlri *nlri,
 			 uint8_t *data, uint16_t length)
 {
 	uint8_t protocolid;
@@ -320,8 +348,8 @@ int bgp_nlri_parse_ls_link(struct peer *peer, struct attr *attr,
 
 	protocolid = *data;
 	id = *((uint64_t *)(data + BGP_LS_NLRI_ID_OFFSET));
-	attr->ls_nlri.ls_hdr.protocol_id = protocolid;
-	attr->ls_nlri.ls_hdr.identifier = id;
+	nlri->ls_hdr.protocol_id = protocolid;
+	nlri->ls_hdr.identifier = id;
 	pnt = data + BGP_LS_NLRI_DATA_MIN_BYTES;
 	lim = data + length;
 	parsedlen = BGP_LS_NLRI_DATA_MIN_BYTES;
@@ -348,7 +376,7 @@ int bgp_nlri_parse_ls_link(struct peer *peer, struct attr *attr,
 		return BGP_NLRI_PARSE_ERROR_PACKET_OVERFLOW;
 	}
 
-	error = bgp_nlri_parse_ls_node_local_desc(peer, attr, tlvdata, tlvdatalen);
+	error = bgp_nlri_parse_ls_node_local_desc(peer, nlri, tlvdata, tlvdatalen);
 	if ( error != BGP_NLRI_PARSE_OK ) {
 		return error;
 	}
@@ -377,18 +405,50 @@ int bgp_nlri_parse_ls_link(struct peer *peer, struct attr *attr,
 		return BGP_NLRI_PARSE_ERROR_PACKET_OVERFLOW;
 	}
 
-	error = bgp_nlri_parse_ls_node_remote_desc(peer, attr, tlvdata, tlvdatalen);
+	error = bgp_nlri_parse_ls_node_remote_desc(peer, nlri, tlvdata, tlvdatalen);
 	if ( error != BGP_NLRI_PARSE_OK ) {
 		return error;
 	}
 	parsedlen += psize;
 	pnt += psize;
 
-	return bgp_nlri_parse_ls_link_desc(peer, attr, pnt, length-parsedlen);
+	return bgp_nlri_parse_ls_link_desc(peer, nlri, pnt, length-parsedlen);
 }
 
-int bgp_nlri_parse_ls_prefix(struct peer *peer, struct attr *attr,
-			 uint8_t *data, uint16_t length, uint8_t afi)
+int bgp_process_ls_link_nlri(struct peer *peer, afi_t afi, safi_t safi, struct attr *attr,
+                             uint8_t *data, uint16_t length)
+{
+   int error;
+   struct prefix_bgp_ls p;
+   struct ls_nlri nlri;
+
+   memset(&nlri, 0, sizeof(struct ls_nlri));
+   error = bgp_nlri_parse_ls_link(peer, &nlri, data, length);
+   if( error != BGP_NLRI_PARSE_OK ) {
+      return error;
+   }
+
+   memset(&p, 0, sizeof(struct prefix_bgp_ls));
+   p.family = AF_BGP_LS;
+   p.prefixlen = sizeof(struct bgp_ls_addr);
+   p.prefix.ls_type = LINK_STATE_LINK_NLRI;
+   p.prefix.ls_link.ls_hdr = nlri.ls_hdr;
+   p.prefix.ls_link.local = nlri.local;
+   p.prefix.ls_link.remote = nlri.remote;
+   p.prefix.ls_link.link = nlri.link;
+
+   if(attr)
+      error = bgp_update(peer, (struct prefix *)&p, 0, attr, afi, safi, 
+                       ZEBRA_ROUTE_BGP, BGP_ROUTE_LS, NULL, NULL, 0, 0, NULL);
+   else
+      error = bgp_withdraw(peer, (struct prefix *)&p, 0, attr, afi, safi,
+                         ZEBRA_ROUTE_BGP, BGP_ROUTE_LS, NULL, NULL, 0, NULL);
+
+   return error;
+}
+
+int bgp_nlri_parse_ls_prefix(struct peer *peer, struct ls_nlri *nlri,
+			 uint8_t *data, uint16_t length, afi_t afi)
 {
 	uint8_t protocolid;
 	uint64_t id;
@@ -403,8 +463,8 @@ int bgp_nlri_parse_ls_prefix(struct peer *peer, struct attr *attr,
 
 	protocolid = *data;
 	id = *((uint64_t *)(data + BGP_LS_NLRI_ID_OFFSET));
-	attr->ls_nlri.ls_hdr.protocol_id = protocolid;
-	attr->ls_nlri.ls_hdr.identifier = id;
+	nlri->ls_hdr.protocol_id = protocolid;
+	nlri->ls_hdr.identifier = id;
 	pnt = data + BGP_LS_NLRI_DATA_MIN_BYTES;
 	lim = data + length;
 
@@ -430,121 +490,46 @@ int bgp_nlri_parse_ls_prefix(struct peer *peer, struct attr *attr,
 		return BGP_NLRI_PARSE_ERROR;
 	}
 
-	error = bgp_nlri_parse_ls_node_local_desc(peer, attr, tlvdata, tlvdatalen);
+	error = bgp_nlri_parse_ls_node_local_desc(peer, nlri, tlvdata, tlvdatalen);
 	if ( error != BGP_NLRI_PARSE_OK ) {
 		return error;
 	}
 
 	pnt += psize;
 	desclen = length - BGP_LS_NLRI_DATA_MIN_BYTES - psize;
-	return bgp_nlri_parse_ls_prefix_desc(peer, attr, pnt, desclen, afi);
+	return bgp_nlri_parse_ls_prefix_desc(peer, nlri, pnt, desclen, afi);
 
 }
 
-static void *bgp_ls_attr_intern( void *arg)
+int bgp_process_ls_prefix_nlri(struct peer *peer, afi_t afi, safi_t safi, struct attr *attr,
+                             uint8_t *data, uint16_t length, afi_t pafi, uint8_t type)
 {
-   ls_attr_type *lsattr = XCALLOC(MTYPE_BGP_LS_ATTR, sizeof(ls_attr_type));
-   memcpy(lsattr, arg, sizeof(ls_attr_type));
-   return lsattr;
-}
+   int error;
+   struct prefix_bgp_ls p;
+   struct ls_nlri nlri;
 
-static void *bgp_ls_node_intern(void *arg)
-{
-   ls_nlriattr_type *nlri = arg;
-   ls_nlri_node *node = XCALLOC(MTYPE_BGP_LS_NODE, sizeof(ls_nlri_node));
-   node->ls_hdr = nlri->ls_hdr;
-   node->local = nlri->local;
-   return node;
-}
+   memset(&nlri, 0, sizeof(struct ls_nlri));
+   error = bgp_nlri_parse_ls_prefix(peer, &nlri, data, length, pafi);
+   if( error != BGP_NLRI_PARSE_OK ) {
+      return error;
+   }
 
-static void *bgp_ls_alloc(void *arg)
-{
-   return arg;
-}
+   memset(&p, 0, sizeof(struct prefix_bgp_ls));
+   p.family = AF_BGP_LS;
+   p.prefixlen = sizeof(struct bgp_ls_addr);
+   p.prefix.ls_type = type;
+   p.prefix.ls_pfx.ls_hdr = nlri.ls_hdr;
+   p.prefix.ls_pfx.local = nlri.local;
+   p.prefix.ls_pfx.prefix = nlri.prefix;
 
-static void *bgp_ls_link_intern(void *arg)
-{
-   ls_nlriattr_type *nlri = arg;
-   ls_nlri_link *link = XCALLOC(MTYPE_BGP_LS_LINK, sizeof(ls_nlri_link));
-   link->ls_hdr = nlri->ls_hdr;
-   link->local = nlri->local;
-   link->remote = nlri->remote;
-   link->link = nlri->link;
-   return link;
-}
+   if(attr)
+      error = bgp_update(peer, (struct prefix *)&p, 0, attr, afi, safi, 
+                       ZEBRA_ROUTE_BGP, BGP_ROUTE_LS, NULL, NULL, 0, 0, NULL);
+   else
+      error = bgp_withdraw(peer, (struct prefix *)&p, 0, attr, afi, safi,
+                         ZEBRA_ROUTE_BGP, BGP_ROUTE_LS, NULL, NULL, 0, NULL);
 
-static void *bgp_ls_prefix_intern(void *arg)
-{
-   ls_nlriattr_type *nlri = arg;
-   ls_nlri_prefix *pfx = XCALLOC(MTYPE_BGP_LS_PREFIX, sizeof(ls_nlri_prefix));
-   pfx->ls_hdr = nlri->ls_hdr;
-   pfx->local = nlri->local;
-   pfx->prefix = nlri->prefix;
-   return pfx;
-}
-
-static void bgp_ls_update_node(struct bgp *bgp, struct attr *attr)
-{
-   ls_nlri_node nodeToAdd;
-   nodeToAdd.ls_hdr = attr->ls_nlri.ls_hdr;
-   nodeToAdd.local = attr->ls_nlri.local;
-
-   ls_attr_type *lsattr = hash_get(bgp->lsattrhash, &attr->ls_attr, bgp_ls_attr_intern);
-   ls_nlri_node *node = hash_get(bgp->lsnodenlrihash, &nodeToAdd, bgp_ls_node_intern);
-   node->ls_attr = lsattr;
-
-   if (!lsattr->nodenlrihash)
-      lsattr->nodenlrihash = hash_create(lsnodenlrihash_key_make, lsnodenlrihash_cmp, "BGP LS Node NLRI hash");
-   hash_get(lsattr->nodenlrihash, node, bgp_ls_alloc);
-}
-
-static void bgp_ls_update_link(struct bgp *bgp, struct attr *attr)
-{
-   ls_nlri_link linkToAdd;
-   linkToAdd.ls_hdr = attr->ls_nlri.ls_hdr;
-   linkToAdd.local = attr->ls_nlri.local;
-   linkToAdd.remote = attr->ls_nlri.remote;
-   linkToAdd.link = attr->ls_nlri.link;
-
-   ls_attr_type *lsattr = hash_get(bgp->lsattrhash, &attr->ls_attr, bgp_ls_attr_intern);
-   ls_nlri_link *link = hash_get(bgp->lslinknlrihash, &linkToAdd, bgp_ls_link_intern);
-   link->ls_attr = lsattr;
-
-   if (!lsattr->linknlrihash)
-      lsattr->linknlrihash = hash_create(lslinknlrihash_key_make, lslinknlrihash_cmp, "BGP LS Link NLRI hash");
-   hash_get(lsattr->linknlrihash, link, bgp_ls_alloc);
-}
-
-static void bgp_ls_update_prefix4(struct bgp *bgp, struct attr *attr)
-{
-   ls_nlri_prefix prefixToAdd;
-   prefixToAdd.ls_hdr = attr->ls_nlri.ls_hdr;
-   prefixToAdd.local = attr->ls_nlri.local;
-   prefixToAdd.prefix = attr->ls_nlri.prefix;
-
-   ls_attr_type *lsattr = hash_get(bgp->lsattrhash, &attr->ls_attr, bgp_ls_attr_intern);
-   ls_nlri_prefix *pfx = hash_get(bgp->lsprefix4nlrihash, &prefixToAdd, bgp_ls_prefix_intern);
-   pfx->ls_attr = lsattr;
-
-   if (!lsattr->prefix4nlrihash)
-      lsattr->prefix4nlrihash = hash_create(lsprefixnlrihash_key_make, lsprefixnlrihash_cmp, "BGP LS Prefix4 NLRI hash");
-   hash_get(lsattr->prefix4nlrihash, pfx, bgp_ls_alloc);
-}
-
-static void bgp_ls_update_prefix6(struct bgp *bgp, struct attr *attr)
-{
-   ls_nlri_prefix prefixToAdd;
-   prefixToAdd.ls_hdr = attr->ls_nlri.ls_hdr;
-   prefixToAdd.local = attr->ls_nlri.local;
-   prefixToAdd.prefix = attr->ls_nlri.prefix;
-
-   ls_attr_type *lsattr = hash_get(bgp->lsattrhash, &attr->ls_attr, bgp_ls_attr_intern);
-   ls_nlri_prefix *pfx = hash_get(bgp->lsprefix6nlrihash, &prefixToAdd, bgp_ls_prefix_intern);
-   pfx->ls_attr = lsattr;
-
-   if (!lsattr->prefix6nlrihash)
-      lsattr->prefix6nlrihash = hash_create(lsprefixnlrihash_key_make, lsprefixnlrihash_cmp, "BGP LS Prefix4 NLRI hash");
-   hash_get(lsattr->prefix6nlrihash, pfx, bgp_ls_alloc);
+   return error;
 }
 
 int bgp_nlri_parse_ls(struct peer *peer, struct attr *attr,
@@ -557,9 +542,14 @@ int bgp_nlri_parse_ls(struct peer *peer, struct attr *attr,
 	uint8_t *nlridata;
 	int psize = 0;
    int error;
+   afi_t afi;
+   safi_t safi;
+   uint8_t nlriCount = 0;
 
 	pnt = packet->nlri;
 	lim = pnt + packet->length;
+   afi = packet->afi;
+   safi = packet->safi;
 
 	for (; pnt < lim; pnt += psize) {
 		/* All BGP LS NLRI types start with type and length */
@@ -567,9 +557,13 @@ int bgp_nlri_parse_ls(struct peer *peer, struct attr *attr,
 			return BGP_NLRI_PARSE_ERROR_BGPLS_MISSING_TYPE;
 
 		type = ntohs(*(uint16_t *)pnt);
-		attr->ls_nlri.type = type;
 		length = ntohs(*(uint16_t *)(pnt + BGP_LS_NLRI_LENGTH_OFFSET));
-		psize = length;
+      
+      if( length == 0 )
+         return BGP_NLRI_PARSE_ERROR_BGPLS_MISSING_TYPE;
+         
+      nlriCount++;
+		psize = length + BGP_LS_NLRI_HEADER_LEN;
 		nlridata = pnt + BGP_LS_NLRI_HEADER_LEN;
 
 		if ( (nlridata + length) > lim ) {
@@ -582,37 +576,28 @@ int bgp_nlri_parse_ls(struct peer *peer, struct attr *attr,
 
 		switch(type) {
 			case LINK_STATE_NODE_NLRI:
-			   error = bgp_nlri_parse_ls_node(peer, attr, nlridata, length);
+            error = bgp_process_ls_node_nlri(peer, afi, safi, mp_withdraw ? NULL : attr,
+                                             nlridata, length);
             if (error != BGP_NLRI_PARSE_OK)
                return error;
-
-            if (!mp_withdraw)
-               bgp_ls_update_node(peer->bgp, attr);
-
             break;
 			case LINK_STATE_LINK_NLRI:
-			   error = bgp_nlri_parse_ls_link(peer, attr, nlridata, length);
+            error = bgp_process_ls_link_nlri(peer, afi, safi, mp_withdraw ? NULL : attr,
+                                             nlridata, length);
             if (error != BGP_NLRI_PARSE_OK)
                return error;
-
-            if (!mp_withdraw)
-               bgp_ls_update_link(peer->bgp, attr);
             break;
 			case LINK_STATE_PREFIX4_NLRI:
-			   error = bgp_nlri_parse_ls_prefix(peer, attr, nlridata, length, AFI_IP);
+            error = bgp_process_ls_prefix_nlri(peer, afi, safi, mp_withdraw ? NULL : attr,
+                                             nlridata, length, AFI_IP, type);
             if (error != BGP_NLRI_PARSE_OK)
                return error;
-
-            if (!mp_withdraw)
-               bgp_ls_update_prefix4(peer->bgp, attr);
             break;
 			case LINK_STATE_PREFIX6_NLRI:
-            error = bgp_nlri_parse_ls_prefix(peer, attr, nlridata, length, AFI_IP6);
+            error = bgp_process_ls_prefix_nlri(peer, afi, safi, mp_withdraw ? NULL : attr,
+                                             nlridata, length, AFI_IP6, type);
             if (error != BGP_NLRI_PARSE_OK)
                return error;
-
-            if (!mp_withdraw)
-               bgp_ls_update_prefix6(peer->bgp, attr);
             break;
 			default:
 				error = BGP_NLRI_PARSE_ERROR;

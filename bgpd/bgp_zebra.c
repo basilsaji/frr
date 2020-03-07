@@ -1495,6 +1495,10 @@ void bgp_zebra_withdraw(struct prefix *p, struct bgp_path_info *info,
 	if (!bgp_install_info_to_zebra(bgp))
 		return;
 
+   if (safi == SAFI_BGP_LS || safi == SAFI_BGP_LS_SPF) {
+      return;
+   }
+
 	if (safi == SAFI_FLOWSPEC) {
 		peer = info->peer;
 		bgp_pbr_update_entry(peer->bgp, p, info, AFI_IP, safi, false);

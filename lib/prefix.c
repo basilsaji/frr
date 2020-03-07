@@ -192,6 +192,12 @@ int prefix_match(const struct prefix *n, const struct prefix *p)
 		return 1;
 	}
 
+   if (n->family ==AF_BGP_LS) {
+      if(!memcmp(&n->u.prefix_bgpls,&p->u.prefix_bgpls, sizeof(struct bgp_ls_addr)))
+         return 1;
+      return 0;
+   }
+
 	/* Set both prefix's head pointer. */
 	np = n->u.val;
 	pp = p->u.val;
@@ -318,6 +324,9 @@ void prefix_copy(union prefixptr udest, union prefixconstptr usrc)
 		dest->u.prefix_flowspec.ptr = (uintptr_t)temp;
 		memcpy((void *)dest->u.prefix_flowspec.ptr,
 		       (void *)src->u.prefix_flowspec.ptr, len);
+   } else if (src->family == AF_BGP_LS) {
+      memcpy(&dest->u.prefix_bgpls, &src->u.prefix_bgpls,
+             sizeof(struct bgp_ls_addr));
 	} else {
 		flog_err(EC_LIB_DEVELOPMENT,
 			 "prefix_copy(): Unknown address family %d",
@@ -370,6 +379,12 @@ int prefix_same(union prefixconstptr up1, union prefixconstptr up2)
 				    p2->u.prefix_flowspec.prefixlen))
 				return 1;
 		}
+      if (p1->family == AF_BGP_LS) {
+         if(!memcmp(&p1->u.prefix_bgpls,
+                    &p2->u.prefix_bgpls,
+                    sizeof(struct bgp_ls_addr)))
+            return 1;
+      }
 	}
 	return 0;
 }
@@ -414,6 +429,11 @@ int prefix_cmp(union prefixconstptr up1, union prefixconstptr up2)
 				return numcmp(pp1[offset], pp2[offset]);
 		return 0;
 	}
+
+   if (p1->family == AF_BGP_LS) {
+      return memcmp(&p1->u.prefix_bgpls,&p2->u.prefix_bgpls,sizeof(struct bgp_ls_addr));
+   }
+
 	pp1 = p1->u.val;
 	pp2 = p2->u.val;
 

@@ -1780,7 +1780,8 @@ int subgroup_announce_check(struct bgp_node *rn, struct bgp_path_info *pi,
 
 	/* If local-preference is not set. */
 	if ((peer->sort == BGP_PEER_IBGP || peer->sort == BGP_PEER_CONFED)
-	    && (!(attr->flag & ATTR_FLAG_BIT(BGP_ATTR_LOCAL_PREF)))) {
+	    && (!(attr->flag & ATTR_FLAG_BIT(BGP_ATTR_LOCAL_PREF)))
+       && (afi != AFI_BGP_LS)) {
 		attr->flag |= ATTR_FLAG_BIT(BGP_ATTR_LOCAL_PREF);
 		attr->local_pref = bgp->default_local_pref;
 	}
@@ -1977,7 +1978,8 @@ int subgroup_announce_check(struct bgp_node *rn, struct bgp_path_info *pi,
 				   piattr->rmap_change_flags)
 	    && !transparent
 	    && !CHECK_FLAG(peer->af_flags[afi][safi],
-			   PEER_FLAG_NEXTHOP_UNCHANGED)) {
+			   PEER_FLAG_NEXTHOP_UNCHANGED)
+       && (afi != AFI_BGP_LS)) {
 		/* We can reset the nexthop, if setting (or forcing) it to
 		 * 'self' */
 		if (CHECK_FLAG(peer->af_flags[afi][safi],
@@ -2417,6 +2419,25 @@ struct bgp_process_queue {
 	unsigned int queued;
 };
 
+static void bgp_process_ls_main(struct bgp *bgp, struct bgp_node *rn,
+                                afi_t afi, safi_t safi)
+{
+   struct bgp_path_info *pi = bgp_node_get_bgp_path_info(rn);
+
+   if (bgp_flag_check(bgp, BGP_FLAG_DELETE_IN_PROGRESS)) {
+      return;
+   }
+
+   if (CHECK_FLAG(pi->flags, BGP_PATH_ATTR_CHANGED)) {
+      group_announce_route(bgp, afi, safi, rn, pi);
+
+      UNSET_FLAG(pi->flags, BGP_PATH_ATTR_CHANGED);
+      UNSET_FLAG(rn->flags, BGP_NODE_LABEL_CHANGED);
+   }
+
+   return;
+}
+
 /*
  * old_select = The old best path
  * new_select = the new best path
@@ -2797,7 +2818,10 @@ static wq_item_status bgp_process_wq(struct work_queue *wq, void *data)
 		STAILQ_NEXT(rn, pq) = NULL; /* complete unlink */
 		table = bgp_node_table(rn);
 		/* note, new RNs may be added as part of processing */
-		bgp_process_main_one(bgp, rn, table->afi, table->safi);
+      if(table->afi == AFI_BGP_LS)
+         bgp_process_ls_main(bgp, rn, table->afi, table->safi);
+      else
+		   bgp_process_main_one(bgp, rn, table->afi, table->safi);
 
 		bgp_unlock_node(rn);
 		bgp_table_unlock(table);
@@ -3292,7 +3316,7 @@ int bgp_update(struct peer *peer, struct prefix *p, uint32_t addpath_id,
 
 	/* Check previously received route. */
 	for (pi = bgp_node_get_bgp_path_info(rn); pi; pi = pi->next)
-		if (pi->peer == peer && pi->type == type
+		if (( afi == AFI_BGP_LS || pi->peer == peer) && pi->type == type
 		    && pi->sub_type == sub_type
 		    && pi->addpath_rx_id == addpath_id)
 			break;
@@ -3519,6 +3543,35 @@ int bgp_update(struct peer *peer, struct prefix *p, uint32_t addpath_id,
 
 			return 0;
 		}
+
+      if(pi->attr->ls_attr.prefix_seq &&
+         attr_new->ls_attr.prefix_seq) {
+         if(attr_new->ls_attr.prefix_seq < pi->attr->ls_attr.prefix_seq) {
+            if (bgp_debug_update(peer, p, NULL, 1)) {
+               if (!peer->rcvd_attr_printed) {
+                  zlog_debug(
+                     "%s rcvd UPDATE w/ attr: %s",
+                     peer->host,
+                     peer->rcvd_attr_str);
+                  peer->rcvd_attr_printed = 1;
+               }
+
+               bgp_debug_rdpfxpath2str(
+                  afi, safi, prd, p, label,
+                  num_labels, addpath_id ? 1 : 0,
+                  addpath_id, pfx_buf,
+                  sizeof(pfx_buf));
+               zlog_debug(
+                  "%s rcvd %s...duplicate ignored",
+                  peer->host, pfx_buf);
+            }
+
+            bgp_unlock_node(rn);
+            bgp_attr_unintern(&attr_new);
+
+            return 0;
+         }
+      }
 
 		/* Withdraw/Announce before we fully processed the withdraw */
 		if (CHECK_FLAG(pi->flags, BGP_PATH_REMOVED)) {
@@ -3887,6 +3940,11 @@ int bgp_update(struct peer *peer, struct prefix *p, uint32_t addpath_id,
 	} else
 		bgp_path_info_set_flag(rn, new, BGP_PATH_VALID);
 
+   if( afi == AFI_BGP_LS) {
+      bgp_path_info_set_flag(rn, new, BGP_PATH_ATTR_CHANGED);
+      bgp_path_info_set_flag(rn, new, BGP_PATH_SELECTED);
+   }
+
 	/* Addpath ID */
 	new->addpath_rx_id = addpath_id;
 
@@ -4064,7 +4122,7 @@ int bgp_withdraw(struct peer *peer, struct prefix *p, uint32_t addpath_id,
 
 	/* Lookup withdrawn route. */
 	for (pi = bgp_node_get_bgp_path_info(rn); pi; pi = pi->next)
-		if (pi->peer == peer && pi->type == type
+		if (( afi == AFI_BGP_LS || pi->peer == peer) && pi->type == type
 		    && pi->sub_type == sub_type
 		    && pi->addpath_rx_id == addpath_id)
 			break;
@@ -6599,6 +6657,9 @@ void bgp_aggregate_increment(struct bgp *bgp, struct prefix *p,
 	struct bgp_aggregate *aggregate;
 	struct bgp_table *table;
 
+   if (afi == AFI_BGP_LS)
+      return;
+
 	table = bgp->aggregate[afi][safi];
 
 	/* No aggregates configured. */
@@ -6631,6 +6692,9 @@ void bgp_aggregate_decrement(struct bgp *bgp, struct prefix *p,
 	struct bgp_node *rn;
 	struct bgp_aggregate *aggregate;
 	struct bgp_table *table;
+
+   if (afi == AFI_BGP_LS)
+      return;
 
 	table = bgp->aggregate[afi][safi];
 

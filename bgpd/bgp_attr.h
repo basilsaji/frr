@@ -187,9 +187,6 @@ struct attr {
 	/* Unknown transitive attribute. */
 	struct transit *transit;
 
-   /* LS transit attribute */
-   struct transit *ls_transit;
-
 	struct in_addr mp_nexthop_global_in;
 
 	/* Aggregator Router ID attribute */
@@ -254,9 +251,6 @@ struct attr {
 
 	/* rmap set table */
 	uint32_t rmap_table_id;
-
-    /* LS NLRI */
-    ls_nlriattr_type ls_nlri;
 
     /* LS ATTR */
     ls_attr_type ls_attr;
@@ -342,7 +336,6 @@ extern unsigned int attrhash_key_make(const void *);
 extern void attr_show_all(struct vty *);
 extern unsigned long int attr_count(void);
 extern unsigned long int attr_unknown_count(void);
-extern unsigned long int ls_attr_transit_count(void);
 
 /* Cluster list prototypes. */
 extern int cluster_loop_check(struct cluster_list *, struct in_addr);
@@ -402,11 +395,11 @@ extern void bgp_packet_mpunreach_prefix(struct stream *s, struct prefix *p,
 					uint32_t, int, uint32_t, struct attr *);
 extern void bgp_packet_mpunreach_end(struct stream *s, size_t attrlen_pnt);
 
-extern void bgp_packet_mpattr_bgp_ls_node_nlri(struct stream *s, struct attr *attr);
-extern void bgp_packet_mpattr_bgp_ls_link_nlri(struct stream *s, struct attr *attr);
-extern void bgp_packet_mpattr_bgp_ls_prefix_nlri(struct stream *s, struct attr *attr);
+extern void bgp_packet_mpattr_bgp_ls_node_nlri(struct stream *s, struct bgp_ls_node *node);
+extern void bgp_packet_mpattr_bgp_ls_link_nlri(struct stream *s, struct bgp_ls_link *link);
+extern void bgp_packet_mpattr_bgp_ls_prefix_nlri(struct stream *s, struct bgp_ls_prefix *prefix);
 extern void bgp_packet_mpattr_bgp_ls(struct stream *s, afi_t afi, safi_t safi,
-					struct attr *attr);
+					struct prefix_bgp_ls *p);
 extern void bgp_packet_lsattr(struct stream *s, afi_t afi, safi_t safi, struct attr *attr);
 extern void bgp_packet_lsattr_prefix(struct stream *s, struct attr *attr);
 extern void bgp_packet_lsattr_link(struct stream *s, struct attr *attr);
