@@ -3473,6 +3473,8 @@ void bgp_packet_mpattr_prefix(struct stream *s, afi_t afi, safi_t safi,
 size_t bgp_packet_mpattr_prefix_size(afi_t afi, safi_t safi, struct prefix *p)
 {
 	int size = PSIZE(p->prefixlen);
+   struct prefix_bgp_ls *lspfx;
+
 	if (safi == SAFI_MPLS_VPN)
 		size += 88;
 	else if (safi == SAFI_LABELED_UNICAST)
@@ -3480,6 +3482,17 @@ size_t bgp_packet_mpattr_prefix_size(afi_t afi, safi_t safi, struct prefix *p)
 	else if (afi == AFI_L2VPN && safi == SAFI_EVPN)
 		size += 232; // TODO: Maximum possible for type-2, type-3 and
 			     // type-5
+   else if (afi == AFI_BGP_LS) {
+      lspfx = (struct prefix_bgp_ls *)p;
+      /* Add the size of the node + number of descriptors * 4(type and length) */
+      if(lspfx->prefix.ls_type == LINK_STATE_NODE_NLRI)
+         size = sizeof(struct bgp_ls_node) + BGP_LS_DESC_COUNT * 4;
+      else if(lspfx->prefix.ls_type == LINK_STATE_LINK_NLRI)
+         size = sizeof(struct bgp_ls_link) + BGP_LS_DESC_COUNT * 4;
+      else
+         size = sizeof(struct bgp_ls_prefix) + BGP_LS_DESC_COUNT * 4;
+   }
+      
 	return size;
 }
 
@@ -3603,82 +3616,91 @@ static int bgp_append_local_as(struct peer *peer, afi_t afi, safi_t safi)
 	return 0;
 }
 
+static void bgp_packet_mpattr_bgp_ls_node_desc(struct stream *s, struct bgp_ls_nodedesc *node)
+{
+   if (node->flag & ATTR_FLAG_BIT(LS_NODE_BGP_RID_BIT)) {
+      stream_putw(s, LS_NODE_BGP_ROUTER_ID);
+      stream_putw(s, BGP_LS_ROUTER_ID_LEN);
+      stream_putl(s, htonl(node->bgp_router_id));
+   }
+
+   if (node->flag & ATTR_FLAG_BIT(LS_NODE_AS_BIT)) {
+      stream_putw(s, LS_NODE_AS);
+      stream_putw(s, BGP_LS_AS_LEN);
+      stream_putl(s, htonl(node->as));
+   }
+
+   if (node->flag & ATTR_FLAG_BIT(LS_NODE_BGP_LS_ID_BIT)) {
+      stream_putw(s, LS_NODE_BGP_LS_ID);
+      stream_putw(s, BGP_LS_ID_LEN);
+      stream_putl(s, htonl(node->ls_id));
+   }
+
+   if (node->flag & ATTR_FLAG_BIT(LS_NODE_IGP_RID_BIT)) {
+      stream_putw(s, LS_NODE_IGP_ROUTER_ID);
+      stream_putw(s, node->igp_router_id.len);
+      stream_put(s, node->igp_router_id.val, node->igp_router_id.len);
+   }
+}
+
 void bgp_packet_mpattr_bgp_ls_node_nlri(struct stream *s, struct bgp_ls_node *node)
 {
 	size_t tlv_len_pos;
-	/* Local node desc */
+	/* Local node desc START */
 	stream_putw(s, LS_LOCAL_NODE_DESC);
 	tlv_len_pos = stream_get_endp(s);
 	/* Marker for length */
 	stream_putw(s, 0);
 
-	if (node->local.flag & ATTR_FLAG_BIT(LS_NODE_BGP_RID_BIT)) {
-		stream_putw(s, LS_NODE_BGP_ROUTER_ID);
-		stream_putw(s, BGP_LS_ROUTER_ID_LEN);
-		stream_putl(s, node->local.bgp_router_id);
-	}
-
-	if (node->local.flag & ATTR_FLAG_BIT(LS_NODE_AS_BIT)) {
-		stream_putw(s, LS_NODE_AS);
-		stream_putw(s, BGP_LS_AS_LEN);
-		stream_putl(s, node->local.as);
-	}
+   /* Add the descriptor TLVs */
+   bgp_packet_mpattr_bgp_ls_node_desc(s, &node->local);
 
 	/* Set node nlri length. Don't count the (2) bytes used to encode
 	   the attr length */
 	stream_putw_at(s, tlv_len_pos, (stream_get_endp(s) - tlv_len_pos) - 2);
+   /* Local node desc END */
 }
 
 void bgp_packet_mpattr_bgp_ls_link_nlri(struct stream *s, struct bgp_ls_link *link)
 {
 	size_t tlv_len_pos;
 	/* 
-	 * Local node desc 
+	 * Local node desc START
 	 */
 	stream_putw(s, LS_LOCAL_NODE_DESC);
 	tlv_len_pos = stream_get_endp(s);
 	/* Marker for length */
 	stream_putw(s, 0);
 
-	if (link->local.flag & ATTR_FLAG_BIT(LS_NODE_BGP_RID_BIT)) {
-		stream_putw(s, LS_NODE_BGP_ROUTER_ID);
-		stream_putw(s, BGP_LS_ROUTER_ID_LEN);
-		stream_putl(s, link->local.bgp_router_id);
-	}
-
-	if (link->local.flag & ATTR_FLAG_BIT(LS_NODE_AS_BIT)) {
-		stream_putw(s, LS_NODE_AS);
-		stream_putw(s, BGP_LS_AS_LEN);
-		stream_putl(s, link->local.as);
-	}
+   /* Add the descriptor TLVs */
+   bgp_packet_mpattr_bgp_ls_node_desc(s, &link->local);
 
 	/* Set node nlri length. Don't count the (2) bytes used to encode
 	   the attr length */
 	stream_putw_at(s, tlv_len_pos, (stream_get_endp(s) - tlv_len_pos) - 2);
 
+   /* 
+    * Local node desc END
+    */
+
 	/* 
-	 * Remote node desc 
+	 * Remote node desc START
 	 */
 	stream_putw(s, LS_REMOTE_NODE_DESC);
 	tlv_len_pos = stream_get_endp(s);
 	/* Marker for length */
 	stream_putw(s, 0);
 
-	if (link->remote.flag & ATTR_FLAG_BIT(LS_NODE_BGP_RID_BIT)) {
-		stream_putw(s, LS_NODE_BGP_ROUTER_ID);
-		stream_putw(s, BGP_LS_ROUTER_ID_LEN);
-		stream_putl(s, link->remote.bgp_router_id);
-	}
-
-	if (link->remote.flag & ATTR_FLAG_BIT(LS_NODE_AS_BIT)) {
-		stream_putw(s, LS_NODE_AS);
-		stream_putw(s, BGP_LS_AS_LEN);
-		stream_putl(s, link->remote.as);
-	}
+   /* Add the descriptor TLVs */
+   bgp_packet_mpattr_bgp_ls_node_desc(s, &link->remote);
 
 	/* Set node nlri length. Don't count the (2) bytes used to encode
 	   the attr length */
 	stream_putw_at(s, tlv_len_pos, (stream_get_endp(s) - tlv_len_pos) - 2);
+
+   /* 
+    * Remote node desc END
+    */
 
 	/*
 	 * Link descriptor TLVs
@@ -3686,32 +3708,32 @@ void bgp_packet_mpattr_bgp_ls_link_nlri(struct stream *s, struct bgp_ls_link *li
 	if (link->link.flag & ATTR_FLAG_BIT(LS_LINK_LOCAL_IPV4_BIT)) {
 		stream_putw(s, LS_LINK_LOCAL_IPV4);
 		stream_putw(s, 4);
-		stream_putl(s, link->link.link_local_ipv4.s_addr);
+		stream_putl(s, htonl(link->link.link_local_ipv4.s_addr));
 	}
 
 	if (link->link.flag & ATTR_FLAG_BIT(LS_LINK_REMOTE_IPV4_BIT)) {
 		stream_putw(s, LS_LINK_REMOTE_IPV4);
 		stream_putw(s, 4);
-		stream_putl(s, link->link.link_remote_ipv4.s_addr);
+		stream_putl(s, htonl(link->link.link_remote_ipv4.s_addr));
 	}
 
 	if (link->link.flag & ATTR_FLAG_BIT(LS_LINK_LOCAL_ID_BIT)) {
 		stream_putw(s, LS_LINK_LOCAL_REMOTE_ID);
 		stream_putw(s, 8);
-		stream_putl(s, link->link.link_localid);
-		stream_putl(s, link->link.link_remoteid);
+		stream_putl(s, htonl(link->link.link_localid));
+		stream_putl(s, htonl(link->link.link_remoteid));
 	}
 
 	if (link->link.flag & ATTR_FLAG_BIT(LS_LINK_LOCAL_IPV6_BIT)) {
 		stream_putw(s, LS_LINK_LOCAL_IPV6);
 		stream_putw(s, 4);
-		stream_put(s, link->link.link_local_ipv6.s6_addr, 16);
+		stream_put(s, link->link.link_local_ipv6.s6_addr, IPV6_MAX_BYTELEN);
 	}
 
 	if (link->link.flag & ATTR_FLAG_BIT(LS_LINK_REMOTE_IPV6_BIT)) {
 		stream_putw(s, LS_LINK_REMOTE_IPV6);
 		stream_putw(s, 4);
-		stream_put(s, link->link.link_remote_ipv6.s6_addr, 16);
+		stream_put(s, link->link.link_remote_ipv6.s6_addr, IPV6_MAX_BYTELEN);
 	}
 
 	//TODO Basil Link IGP Metric
@@ -3722,35 +3744,30 @@ void bgp_packet_mpattr_bgp_ls_prefix_nlri(struct stream *s, struct bgp_ls_prefix
 {
 	size_t tlv_len_pos;
 	/* 
-	 * Local node desc 
+	 * Local node desc START
 	 */
 	stream_putw(s, LS_LOCAL_NODE_DESC);
 	tlv_len_pos = stream_get_endp(s);
 	/* Marker for length */
 	stream_putw(s, 0);
 
-	if (p->local.flag & ATTR_FLAG_BIT(LS_NODE_BGP_RID_BIT)) {
-		stream_putw(s, LS_NODE_BGP_ROUTER_ID);
-		stream_putw(s, BGP_LS_ROUTER_ID_LEN);
-		stream_putl(s, p->local.bgp_router_id);
-	}
-
-	if (p->local.flag & ATTR_FLAG_BIT(LS_NODE_AS_BIT)) {
-		stream_putw(s, LS_NODE_AS);
-		stream_putw(s, BGP_LS_AS_LEN);
-		stream_putl(s, p->local.as);
-	}
+   /* Add the descriptor TLVs */
+   bgp_packet_mpattr_bgp_ls_node_desc(s, &p->local);
 
 	/* Set node nlri length. Don't count the (2) bytes used to encode
 	   the attr length */
 	stream_putw_at(s, tlv_len_pos, (stream_get_endp(s) - tlv_len_pos) - 2);
+   /* 
+    * Local node desc END
+    */
 
 	/*
 	 * Prefix desc
 	 */
 	if (p->prefix.flag & ATTR_FLAG_BIT(LS_PREFIX_BIT)) {
 		stream_putw(s, LS_PREFIX_IP_REACH);
-		stream_putc(s, PSIZE(p->prefix.p.prefixlen));
+		stream_putw(s, PSIZE(p->prefix.p.prefixlen) + 1);
+      stream_putc(s, p->prefix.p.prefixlen);
 		stream_put(s, p->prefix.p.val, PSIZE(p->prefix.p.prefixlen));
 	}
 }
@@ -3758,10 +3775,10 @@ void bgp_packet_mpattr_bgp_ls_prefix_nlri(struct stream *s, struct bgp_ls_prefix
 
 void bgp_packet_mpattr_bgp_ls(struct stream *s, afi_t afi, safi_t safi,
 				struct prefix_bgp_ls *p) {
-	size_t nlri_len_pos;
    struct bgp_ls_node *node;
    struct bgp_ls_link *link;
    struct bgp_ls_prefix *prefix;
+   size_t nlri_len_pos;
 
 	if (safi == SAFI_BGP_LS_SPF) {
 		switch (p->prefix.ls_type) {
@@ -3778,7 +3795,7 @@ void bgp_packet_mpattr_bgp_ls(struct stream *s, afi_t afi, safi_t safi,
 			case LINK_STATE_LINK_NLRI:
             link = &(p->prefix.ls_link);
 				stream_putw(s, LINK_STATE_LINK_NLRI);
-				nlri_len_pos = stream_get_endp(s);
+            nlri_len_pos = stream_get_endp(s);
 				stream_putw(s, 0);
 				stream_putc(s, link->ls_hdr.protocol_id);
 				stream_putq(s, link->ls_hdr.identifier);
@@ -3788,7 +3805,7 @@ void bgp_packet_mpattr_bgp_ls(struct stream *s, afi_t afi, safi_t safi,
 			case LINK_STATE_PREFIX4_NLRI:
             prefix = &(p->prefix.ls_pfx);
 				stream_putw(s, LINK_STATE_PREFIX4_NLRI);
-				nlri_len_pos = stream_get_endp(s);
+            nlri_len_pos = stream_get_endp(s);
 				stream_putw(s, 0);
 				stream_putc(s, prefix->ls_hdr.protocol_id);
 				stream_putq(s, prefix->ls_hdr.identifier);
@@ -3798,7 +3815,7 @@ void bgp_packet_mpattr_bgp_ls(struct stream *s, afi_t afi, safi_t safi,
 			case LINK_STATE_PREFIX6_NLRI:
             prefix = &(p->prefix.ls_pfx);
 				stream_putw(s, LINK_STATE_PREFIX6_NLRI);
-				nlri_len_pos = stream_get_endp(s);
+            nlri_len_pos = stream_get_endp(s);
 				stream_putw(s, 0);
             stream_putc(s, prefix->ls_hdr.protocol_id);
             stream_putq(s, prefix->ls_hdr.identifier);
@@ -3860,6 +3877,12 @@ void bgp_packet_lsattr_prefix(struct stream *s, struct attr *attr)
 		stream_putc(s, attr->ls_attr.prefix_spf_status);
 	}
 
+   if (attr->ls_attr.flag & ATTR_FLAG_BIT(LS_PREFIX_ATTR_IGP_FLAGS_PRESENT)) {
+      stream_putw(s, LS_PREFIX_ATTR_IGP_FLAGS);
+      stream_putw(s, 1);
+      stream_putc(s, attr->ls_attr.igp_flags);
+   }
+
 	if (attr->ls_attr.flag & ATTR_FLAG_BIT(LS_PREFIX_ATTR_SEQ_PRESENT)) {
 		stream_putw(s, LS_PREFIX_ATTR_SEQ);
 		stream_putw(s, 8);
@@ -3913,13 +3936,9 @@ bgp_size_t bgp_packet_attribute(struct bgp *bgp, struct peer *peer,
 
 		mpattrlen_pos = bgp_packet_mpattr_start(s, peer, afi, safi,
 							vecarr, attr);
-		if (afi == AFI_BGP_LS) {
-			bgp_packet_mpattr_bgp_ls(s, afi, safi, p);
-		} else {
-			bgp_packet_mpattr_prefix(s, afi, safi, p, prd, label,
-						 num_labels, addpath_encode,
-						 addpath_tx_id, attr);
-		}
+      bgp_packet_mpattr_prefix(s, afi, safi, p, prd, label,
+                num_labels, addpath_encode,
+                addpath_tx_id, attr);
 		bgp_packet_mpattr_end(s, mpattrlen_pos);
 
 	}

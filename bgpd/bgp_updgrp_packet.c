@@ -760,6 +760,10 @@ struct bpacket *subgroup_update_packet(struct update_subgroup *subgrp)
 			goto next;
 		}
 
+      if (num_pfx == 75) {
+         num_pfx = 75;
+      }
+
 		space_remaining = STREAM_CONCAT_REMAIN(s, snlri, STREAM_SIZE(s))
 				  - BGP_MAX_PACKET_SIZE_OVERFLOW;
 		space_needed =
@@ -863,7 +867,7 @@ struct bpacket *subgroup_update_packet(struct update_subgroup *subgrp)
 					adv->baa->attr);
 
          if (afi == AFI_BGP_LS) {
-            bgp_packet_mpattr_bgp_ls(s, afi, safi, &rn->p);
+            bgp_packet_mpattr_bgp_ls(snlri, afi, safi, &rn->p);
          } else {
             bgp_packet_mpattr_prefix(snlri, afi, safi, &rn->p, prd,
                       label_pnt, num_labels,

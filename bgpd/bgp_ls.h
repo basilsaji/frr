@@ -35,6 +35,7 @@
 
 #define BGP_LS_ROUTER_ID_LEN 4
 #define BGP_LS_AS_LEN 4
+#define BGP_LS_ID_LEN 4
 
 typedef enum {
 	LINK_STATE_NODE_NLRI = 1,
@@ -57,6 +58,8 @@ typedef enum {
 	LS_NODE_IGP_ROUTER_ID = 515,
 	LS_NODE_BGP_ROUTER_ID = 516,
 } bgp_ls_desc_tlv_type;
+
+#define BGP_LS_DESC_COUNT 12
 
 typedef enum {
 	LS_PREFIX_BIT = 1,
