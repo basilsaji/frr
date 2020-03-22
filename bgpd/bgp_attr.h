@@ -404,6 +404,7 @@ extern void bgp_packet_lsattr(struct stream *s, afi_t afi, safi_t safi, struct a
 extern void bgp_packet_lsattr_prefix(struct stream *s, struct attr *attr);
 extern void bgp_packet_lsattr_link(struct stream *s, struct attr *attr);
 extern void bgp_packet_lsattr_node(struct stream *s, struct attr *attr);
+extern void bgp_packet_lsattr_common(struct stream *s, struct attr *attr);
 
 extern bgp_attr_parse_ret_t bgp_attr_nexthop_valid(struct peer *peer,
 						   struct attr *attr);

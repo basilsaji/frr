@@ -82,27 +82,35 @@ typedef enum {
 } bgp_ls_linknlri_data_bits;
 
 typedef enum {
-	LS_NODE_ATTR_SPF_CAP = 1180,
-	LS_NODE_ATTR_SPF_STATUS = 1184,
-	LS_LINK_ATTR_PREFIX_LEN = 3,
-	LS_LINK_ATTR_SPF_STATUS = 1182,
-	LS_LINK_IGP_METRIC = 1095,
-	LS_PREFIX_ATTR_METRIC = 1155,
-	LS_PREFIX_ATTR_SPF_STATUS = 1183,
-	LS_PREFIX_ATTR_SEQ = 1181,
+   LS_LINK_IGP_METRIC = 1095,
    LS_PREFIX_ATTR_IGP_FLAGS = 1152,
+   LS_PREFIX_ATTR_METRIC = 1155,
+	LS_NODE_ATTR_SPF_CAP = 1180,
+   LS_PREFIX_ATTR_SEQ = 1181,
+   LS_LINK_ATTR_IPV4_PREFIX_LEN = 1182,
+   LS_LINK_ATTR_IPV6_PREFIX_LEN = 1183,
+	LS_ATTR_SPF_STATUS = 1184,
+   LS_ATTR_LOCAL_IPV4_ROUTER_ID = 1028,
+   LS_ATTR_LOCAL_IPV6_ROUTER_ID = 1029,
+   LS_ATTR_REMOTE_IPV4_ROUTER_ID = 1030,
+   LS_ATTR_REMOTE_IPV6_ROUTER_ID = 1031,
+   LS_LINK_ATTR_LINK_NAME = 1098,
 } bgp_ls_attr_tlv_type;
 
 typedef enum {
-	LS_NODE_ATTR_SPF_CAP_PRESENT = 1,
-	LS_NODE_ATTR_SPF_STATUS_PRESENT = 2,
-	LS_LINK_ATTR_PREFIX_LEN_PRESENT = 3,
-	LS_LINK_ATTR_SPF_STATUS_PRESENT = 4,
-	LS_LINK_IGP_METRIC_PRESENT = 5,
-	LS_PREFIX_ATTR_METRIC_PRESENT = 6,
-	LS_PREFIX_ATTR_SPF_STATUS_PRESENT = 7,
-	LS_PREFIX_ATTR_SEQ_PRESENT = 8,
-   LS_PREFIX_ATTR_IGP_FLAGS_PRESENT = 9,
+   LS_LINK_IGP_METRIC_PRESENT = 1,
+   LS_PREFIX_ATTR_IGP_FLAGS_PRESENT = 2,
+   LS_PREFIX_ATTR_METRIC_PRESENT = 3,
+	LS_NODE_ATTR_SPF_CAP_PRESENT = 4,
+   LS_PREFIX_ATTR_SEQ_PRESENT = 5,
+	LS_LINK_ATTR_IPV4_PREFIX_LEN_PRESENT = 64,
+	LS_LINK_ATTR_IPV6_PREFIX_LEN_PRESENT = 7,
+   LS_ATTR_SPF_STATUS_PRESENT = 8,
+   LS_ATTR_LOCAL_IPV4_ROUTER_ID_PRESENT = 9,
+   LS_ATTR_LOCAL_IPV6_ROUTER_ID_PRESENT = 10,
+   LS_ATTR_REMOTE_IPV4_ROUTER_ID_PRESENT = 11,
+   LS_ATTR_REMOTE_IPV6_ROUTER_ID_PRESENT = 12,
+   LS_LINK_ATTR_LINK_NAME_PRESENT = 13,
 } bgp_ls_attr_tlv_bit;
 
 typedef enum {
@@ -123,27 +131,34 @@ typedef struct {
 	uint8_t spf_algo;
 
 	/* BGP LS SPF status */
-	uint8_t node_spf_status;
+	uint8_t spf_status;
 
 	/* BGP LS IGP metric */
 	uint32_t link_igp_metric;
 
-	/* BGP LS Prefix Length */
-	uint8_t link_prefix_len;
-
 	/* bgp ls link spf status */
-	uint8_t link_spf_status;
+	uint8_t link_ipv4_prefix_len;
 
 	/* BGP LS Prefix metric */
 	uint32_t prefix_metric;
 
 	/* bgp ls prefix spf status */
-	uint8_t prefix_spf_status;
+	uint8_t link_ipv6_prefix_len;;
 
 	/* BGP LS seq lower/higher */
 	uint64_t prefix_seq;
 
    uint8_t igp_flags;
+
+   struct in_addr local_ipv4_rid;
+
+   struct in6_addr local_ipv6_rid;
+
+   struct in_addr remote_ipv4_rid;
+
+   struct in6_addr remote_ipv6_rid;
+
+   uint8_t link_name[255];
 
 } ls_attr_type;
 
